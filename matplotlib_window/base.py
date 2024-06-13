@@ -401,3 +401,9 @@ class DragRect(_DraggableObject):
         rect_params = transform_rect_params(ax, 0)  # Doesn't matter what the x is, only need height
         self.myobj.set_height(rect_params.height)
         self.parent_canvas.draw()
+
+    @property
+    def bounds(self) -> tuple[NUMERIC_T, NUMERIC_T]:
+        """Return the x-axis locations of the left & right edges."""
+        l_pos = self.myobj.get_x()
+        return l_pos, (l_pos + self.myobj.get_width())
