@@ -203,6 +203,7 @@ class DragLine(_DraggableObject):
         **kwargs: t.Any,
     ) -> None:
         self.orientation = orientation
+        self.snap_to = validate_snap_to(snap_to)
 
         line_pos = (position, position)  # matplotlib expectes a coordinate pair
         if orientation == Orientation.HORIZONTAL:
@@ -213,7 +214,10 @@ class DragLine(_DraggableObject):
             raise ValueError(f"Unsupported orientation provided: '{orientation}'")
 
         self.register_plot_object(obj, ax)
-        self.snap_to = validate_snap_to(snap_to)
+        if orientation == Orientation.HORIZONTAL:
+            self.axes_limit_change = ax.callbacks.connect("xlim_changed", self.limit_change)
+        else:
+            self.axes_limit_change = ax.callbacks.connect("ylim_changed", self.limit_change)
 
     def on_motion(self, event: Event) -> t.Any:
         """
@@ -234,22 +238,33 @@ class DragLine(_DraggableObject):
         if (event.xdata is None) or (event.ydata is None):
             return
 
-        if self.orientation == Orientation.VERTICAL:
-            if self.snap_to:
-                new_pos = limit_drag(self.snap_to.get_xdata(), event.xdata)
-            else:
-                new_pos = event.xdata
-
-            self.myobj.set_xdata((new_pos, new_pos))
-            self.myobj.set_ydata(self.parent_axes.get_ylim())
-        elif self.orientation == Orientation.HORIZONTAL:
+        if self.orientation == Orientation.HORIZONTAL:
             if self.snap_to:
                 new_pos = limit_drag(self.snap_to.get_ydata(), event.ydata)
             else:
                 new_pos = event.xdata
 
             self.myobj.set_xdata(self.parent_axes.get_xlim())
-            self.myobj.set_ydata((new_pos, new_pos))
+        elif self.orientation == Orientation.VERTICAL:
+            if self.snap_to:
+                new_pos = limit_drag(self.snap_to.get_xdata(), event.xdata)
+            else:
+                new_pos = event.xdata
+
+            self.myobj.set_xdata((new_pos, new_pos))
+
+        self.parent_canvas.draw()
+
+    def limit_change(self, ax: Axes) -> None:
+        """
+        Axes limit change callback.
+
+        Resize the dragline to span the entirety of its relevant axis if the limit is changed.
+        """
+        if self.orientation == Orientation.HORIZONTAL:
+            self.myobj.set_xdata(ax.get_xlim())
+        else:
+            self.myobj.set_ydata(ax.get_ylim())
 
         self.parent_canvas.draw()
 
@@ -300,6 +315,8 @@ class DragRect(_DraggableObject):
         alpha: NUMERIC_T = 0.4,
         **kwargs: t.Any,
     ) -> None:
+        self.snap_to = validate_snap_to(snap_to)
+
         # Rectangle patches are located from their bottom left corner; because we want to span the
         # full y range, we need to translate the y position to the bottom of the axes
         rect_params = transform_rect_params(ax, position)
@@ -316,7 +333,7 @@ class DragRect(_DraggableObject):
 
         self.oldxy = rect_params.xy  # Used for drag deltas so the object doesn't jump to cursor
         self.register_plot_object(obj, ax)
-        self.snap_to = validate_snap_to(snap_to)
+        self.axes_limit_change = ax.callbacks.connect("ylim_changed", self.limit_change)
 
     def on_motion(self, event: Event) -> t.Any:
         """
@@ -358,7 +375,6 @@ class DragRect(_DraggableObject):
 
         rect_params = transform_rect_params(self.parent_axes, new_x)
         self.myobj.xy = rect_params.xy
-        self.myobj.set_height(rect_params.height)
 
         self.parent_canvas.draw()
 
@@ -375,3 +391,13 @@ class DragRect(_DraggableObject):
 
         self.oldxy = self.myobj.get_xy()
         self.disconnect()
+
+    def limit_change(self, ax: Axes) -> None:
+        """
+        Axes limit change callback.
+
+        Resize the rectangle to span the entirety of the y-axis if the axis limit is changed.
+        """
+        rect_params = transform_rect_params(ax, 0)  # Doesn't matter what the x is, only need height
+        self.myobj.set_height(rect_params.height)
+        self.parent_canvas.draw()
