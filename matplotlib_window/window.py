@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 
 from matplotlib_window.base import DragRect, NUMERIC_T
 
-DEFAULT_AXES_KWARGS = {
+DEFAULT_AXES_KWARGS: dict[str, t.Any] = {
     "title": "Close window to return selected window bounds",
 }
 
-DEFAULT_PLOT_KWARGS = {}
+DEFAULT_PLOT_KWARGS: dict[str, t.Any] = {}
 
 
 def fixed_window(

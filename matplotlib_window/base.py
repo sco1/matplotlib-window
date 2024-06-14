@@ -152,6 +152,21 @@ class _DraggableObject:
         self.parent_canvas.mpl_disconnect(self.click_release)
         self.parent_canvas.draw()
 
+    def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
+        """
+        Validate that the `snap_to` object, if provided, actually contains x data.
+
+        If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
+        Otherwise an exception is raised.
+        """
+        if snap_to is not None:
+            try:
+                snap_to.get_xdata()
+            except AttributeError as e:
+                raise ValueError("Cannot provide an empty lineseries to snapto") from e
+
+        return snap_to
+
 
 def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
     """Clamp the query value within the bounds of the provided dataset."""
@@ -164,22 +179,6 @@ def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
         return min_val  # type: ignore[no-any-return]
     else:
         return query
-
-
-def validate_snap_to(snap_to: Line2D | None) -> Line2D | None:
-    """
-    Validate that the `snap_to` object, if provided, actually contains x data.
-
-    If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
-    Otherwise an exception is raised.
-    """
-    if snap_to is not None:
-        try:
-            snap_to.get_xdata()
-        except AttributeError as e:
-            raise ValueError("Cannot provide an empty lineseries to snapto") from e
-
-    return snap_to
 
 
 class DragLine(_DraggableObject):
@@ -203,7 +202,6 @@ class DragLine(_DraggableObject):
         **kwargs: t.Any,
     ) -> None:
         self.orientation = orientation
-        self.snap_to = validate_snap_to(snap_to)
 
         line_pos = (position, position)  # matplotlib expectes a coordinate pair
         if orientation == Orientation.HORIZONTAL:
@@ -218,6 +216,8 @@ class DragLine(_DraggableObject):
             self.axes_limit_change = ax.callbacks.connect("xlim_changed", self.limit_change)
         else:
             self.axes_limit_change = ax.callbacks.connect("ylim_changed", self.limit_change)
+
+        self.snap_to = self.validate_snap_to(snap_to)
 
     def on_motion(self, event: Event) -> t.Any:
         """
@@ -268,6 +268,41 @@ class DragLine(_DraggableObject):
 
         self.parent_canvas.draw()
 
+    def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
+        """
+        Validate that the `snap_to` object, if provided, actually contains x data.
+
+        If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
+        Otherwise an exception is raised.
+
+        NOTE: This should be called after the draggable object is registered so the object is
+        instantiated & references are set.
+        """
+        if snap_to is None:
+            return None
+
+        # Superclass implementation handles checking that the lineseries contains data
+        super().validate_snap_to(snap_to)
+
+        # Check that the draggable line is within the bounds of the snap_to lineseries
+        plotted_data = snap_to.get_xdata()
+        min_val, max_val = plotted_data.min(), plotted_data.max()  # type: ignore[union-attr]
+        if not (min_val <= self.location <= max_val):
+            raise ValueError("DragLine must be within the bounds of the provided snapto line")
+
+        return snap_to
+
+    @property
+    def location(self) -> NUMERIC_T:
+        """Return the location of the `DragLine` along its relevant axis."""
+        pos: t.Sequence[NUMERIC_T]
+        if self.orientation == Orientation.VERTICAL:
+            pos = self.myobj.get_ydata()  # type: ignore[assignment]
+        else:
+            pos = self.myobj.get_xdata()  # type: ignore[assignment]
+
+        return pos[0]  # Should be a (location, location) tuple
+
 
 class RectParams(t.NamedTuple):  # noqa: D101
     xy: COORD_T
@@ -315,8 +350,6 @@ class DragRect(_DraggableObject):
         alpha: NUMERIC_T = 0.4,
         **kwargs: t.Any,
     ) -> None:
-        self.snap_to = validate_snap_to(snap_to)
-
         # Rectangle patches are located from their bottom left corner; because we want to span the
         # full y range, we need to translate the y position to the bottom of the axes
         rect_params = transform_rect_params(ax, position)
@@ -334,6 +367,8 @@ class DragRect(_DraggableObject):
         self.oldxy = rect_params.xy  # Used for drag deltas so the object doesn't jump to cursor
         self.register_plot_object(obj, ax)
         self.axes_limit_change = ax.callbacks.connect("ylim_changed", self.limit_change)
+
+        self.snap_to = self.validate_snap_to(snap_to)
 
     def on_motion(self, event: Event) -> t.Any:
         """
@@ -401,6 +436,31 @@ class DragRect(_DraggableObject):
         rect_params = transform_rect_params(ax, 0)  # Doesn't matter what the x is, only need height
         self.myobj.set_height(rect_params.height)
         self.parent_canvas.draw()
+
+    def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
+        """
+        Validate that the `snap_to` object, if provided, actually contains x data.
+
+        If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
+        Otherwise an exception is raised.
+
+        NOTE: This should be called after the draggable object is registered so the object is
+        instantiated & references are set.
+        """
+        if snap_to is None:
+            return None
+
+        # Superclass implementation handles checking that the lineseries contains data
+        super().validate_snap_to(snap_to)
+
+        # Check that the draggable rectangle is within the bounds of the snap_to lineseries
+        l_pos, r_pos = self.bounds
+        plotted_data = snap_to.get_xdata()
+        min_val, max_val = plotted_data.min(), plotted_data.max()  # type: ignore[union-attr]
+        if not (min_val <= l_pos <= max_val) or not (min_val <= r_pos <= max_val):
+            raise ValueError("DragRect must be within the bounds of the provided snapto line")
+
+        return snap_to
 
     @property
     def bounds(self) -> tuple[NUMERIC_T, NUMERIC_T]:
