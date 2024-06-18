@@ -159,11 +159,16 @@ class _DraggableObject:
         If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
         Otherwise an exception is raised.
         """
-        if snap_to is not None:
-            try:
-                snap_to.get_xdata()
-            except AttributeError as e:
-                raise ValueError("Cannot provide an empty lineseries to snapto") from e
+        if snap_to is None:
+            return None
+
+        try:
+            xydata = snap_to.get_xydata()
+        except AttributeError as e:
+            raise ValueError("Cannot provide an empty lineseries to snapto") from e
+
+        if len(xydata) == 0:  # type: ignore[arg-type]
+            raise ValueError("Cannot provide an empty lineseries to snapto")
 
         return snap_to
 
@@ -297,9 +302,9 @@ class DragLine(_DraggableObject):
         """Return the location of the `DragLine` along its relevant axis."""
         pos: t.Sequence[NUMERIC_T]
         if self.orientation == Orientation.VERTICAL:
-            pos = self.myobj.get_ydata()  # type: ignore[assignment]
-        else:
             pos = self.myobj.get_xdata()  # type: ignore[assignment]
+        else:
+            pos = self.myobj.get_ydata()  # type: ignore[assignment]
 
         return pos[0]  # Should be a (location, location) tuple
 
@@ -350,6 +355,9 @@ class DragRect(_DraggableObject):
         alpha: NUMERIC_T = 0.4,
         **kwargs: t.Any,
     ) -> None:
+        if width <= 0:
+            raise ValueError(f"Width value must be greater than 1. Received: {width}")
+
         # Rectangle patches are located from their bottom left corner; because we want to span the
         # full y range, we need to translate the y position to the bottom of the axes
         rect_params = transform_rect_params(ax, position)

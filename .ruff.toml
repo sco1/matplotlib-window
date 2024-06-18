@@ -54,3 +54,6 @@ ignore = [
 "tests/test_*.py" = [
     "D103",
 ]
+"tests/conftest.py" = [
+    "D103",
+]
