@@ -475,3 +475,62 @@ class DragRect(_DraggableObject):
         """Return the x-axis locations of the left & right edges."""
         l_pos = self.myobj.get_x()
         return l_pos, (l_pos + self.myobj.get_width())
+
+
+class FlexibleRect(_DraggableObject):
+    """
+    A flexible-width rectangle.
+
+    `position` specifies the x-coordinate of the left edge of the rectangle.
+
+    `snap_to` may be optionally specified as an instance of a `Line2D` object to prevent dragging of
+    the rectangle beyond the extent of the plotted data.
+
+    NOTE: Motion is constrained to the x-axis only.
+    """
+
+    def __init__(
+        self,
+        ax: Axes,
+        position: NUMERIC_T,
+        width: NUMERIC_T,
+        snap_to: Line2D | None = None,
+        edgecolor: str = "limegreen",
+        facecolor: str = "limegreen",
+        alpha: NUMERIC_T = 0.4,
+    ) -> None:
+        if width <= 0:
+            raise ValueError(f"Width value must be greater than 1. Received: {width}")
+
+        raise NotImplementedError
+
+    def on_motion(self, event: Event) -> t.Any:
+        raise NotImplementedError
+
+    def limit_change(self, ax: Axes) -> None:
+        """
+        Axes limit change callback.
+
+        Resize the rectangle to span the entirety of the y-axis if the axis limit is changed.
+        """
+        raise NotImplementedError
+
+    def on_release(self, event: Event) -> t.Any:
+        raise NotImplementedError
+
+    def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
+        """
+        Validate that the `snap_to` object, if provided, actually contains x data.
+
+        If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
+        Otherwise an exception is raised.
+
+        NOTE: This should be called after the draggable object is registered so the object is
+        instantiated & references are set.
+        """
+        raise NotImplementedError
+
+    @property
+    def bounds(self) -> tuple[NUMERIC_T, NUMERIC_T]:
+        """Return the x-axis locations of the left & right edges."""
+        raise NotImplementedError
