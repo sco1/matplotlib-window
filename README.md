@@ -3,6 +3,25 @@
 [![PyPI](https://img.shields.io/pypi/v/matplotlib-window?logo=Python&logoColor=FFD43B)](https://pypi.org/project/matplotlib-window/)
 [![PyPI - License](https://img.shields.io/pypi/l/matplotlib-window?color=magenta)](https://github.com/sco1/matplotlib-window/blob/main/LICENSE)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/sco1/matplotlib-window/main.svg)](https://results.pre-commit.ci/latest/github/sco1/matplotlib-window/main)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-black)](https://github.com/psf/black)
 
-Draggable data windowing for matplotlib plots. Inspired by the adventures with past me and [`dragpy`](https://github.com/sco1-archive/dragpy).
+Draggable data windowing for matplotlib plots. Inspired by the adventures of past me and [`dragpy`](https://github.com/sco1-archive/dragpy).
+
+## Interface
+For most use cases, interaction with this library is done via the helper wrappers in `matplotlib_window.window`. These functions will accept the user data and build the plots directly for windowing.
+
+### `fixed_window`
+Plot the provided data & build a draggable fixed-width window to select bounds of interest; the x-locations of the edges of the window are returned once the figure window is closed.
+
+#### Parameters
+| Parameter      | Description                                                                 | Type                   | Default          |
+|----------------|-----------------------------------------------------------------------------|------------------------|------------------|
+| `x_data`       | x data values to plot                                                       | `Sequence[int\|float]` | Required         |
+| `y_data`       | y data values to plot                                                       | `Sequence[int\|float]` | Required         |
+| `position`     | x-coordinate of the left edge of the window                                 | `int\|float`           | Required         |
+| `window_width` | Width, along the x-axis, of the draggable window                            | `int\|float`           | Required         |
+| `snap_to_data` | Prevent dragging of the window beyond beyond the bounds of the plotted data | `bool`                 | `True`           |
+| `axes_kwargs`  | Optional kwargs to pass to the `Axes` constructor<sup>1</sup>               | `dict[str, Any]`       | `{"title": ...}` |
+| `plot_kwargs`  | Optional kwargs to pass to the plotting call<sup>2</sup>                    | `dict[str, Any]`       | `{}`             |
+
+1. kwargs are passed directly to the `Axes` constructor, see the [`matplotlib.axes.Axes` documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.html#matplotlib.axes.Axes) for supported arguments.
+2. kwargs are passed directly to the plotting call, see the [`matplotlib.pyplot.plot` documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.plot.html) for supported arguments.
