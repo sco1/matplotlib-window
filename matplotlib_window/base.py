@@ -172,6 +172,11 @@ class _DraggableObject:
 
         return snap_to
 
+    def _disable_click(self) -> None:
+        """Disconnect the button press event for the current instance."""
+        self.parent_canvas.mpl_disconnect(self.click_press)
+        self.click_press = -1
+
 
 def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
     """Clamp the query value within the bounds of the provided dataset."""
@@ -350,13 +355,13 @@ class DragRect(_DraggableObject):
         position: NUMERIC_T,
         width: NUMERIC_T,
         snap_to: Line2D | None = None,
-        edgecolor: str = "limegreen",
+        edgecolor: str | None = "limegreen",
         facecolor: str = "limegreen",
         alpha: NUMERIC_T = 0.4,
         **kwargs: t.Any,
     ) -> None:
         if width <= 0:
-            raise ValueError(f"Width value must be greater than 1. Received: {width}")
+            raise ValueError(f"Width value must be greater than 0. Received: {width}")
 
         # Rectangle patches are located from their bottom left corner; because we want to span the
         # full y range, we need to translate the y position to the bottom of the axes
@@ -477,7 +482,7 @@ class DragRect(_DraggableObject):
         return l_pos, (l_pos + self.myobj.get_width())
 
 
-class FlexibleRect(_DraggableObject):
+class FlexibleRect:
     """
     A flexible-width rectangle.
 
@@ -495,42 +500,30 @@ class FlexibleRect(_DraggableObject):
         position: NUMERIC_T,
         width: NUMERIC_T,
         snap_to: Line2D | None = None,
+        allow_face_drag: bool = False,
         edgecolor: str = "limegreen",
         facecolor: str = "limegreen",
         alpha: NUMERIC_T = 0.4,
     ) -> None:
         if width <= 0:
-            raise ValueError(f"Width value must be greater than 1. Received: {width}")
+            raise ValueError(f"Width value must be greater than 0. Received: {width}")
 
-        raise NotImplementedError
+        # snap_to validation handled by DragRect & DragLine
+        # Create edges after face so they're topmost & take click priority
+        self.face = DragRect(
+            ax=ax, position=position, width=width, facecolor=facecolor, edgecolor=None, alpha=alpha
+        )
+        self.edges = [
+            DragLine(ax=ax, position=position, color=edgecolor, snap_to=snap_to),
+            DragLine(ax=ax, position=(position + width), color=edgecolor, snap_to=snap_to),
+        ]
 
-    def on_motion(self, event: Event) -> t.Any:
-        raise NotImplementedError
-
-    def limit_change(self, ax: Axes) -> None:
-        """
-        Axes limit change callback.
-
-        Resize the rectangle to span the entirety of the y-axis if the axis limit is changed.
-        """
-        raise NotImplementedError
-
-    def on_release(self, event: Event) -> t.Any:
-        raise NotImplementedError
-
-    def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
-        """
-        Validate that the `snap_to` object, if provided, actually contains x data.
-
-        If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
-        Otherwise an exception is raised.
-
-        NOTE: This should be called after the draggable object is registered so the object is
-        instantiated & references are set.
-        """
-        raise NotImplementedError
+        if not allow_face_drag:
+            self.face._disable_click()
+        else:
+            raise NotImplementedError
 
     @property
     def bounds(self) -> tuple[NUMERIC_T, NUMERIC_T]:
         """Return the x-axis locations of the left & right edges."""
-        raise NotImplementedError
+        return tuple(sorted(edge.location for edge in self.edges))  # type: ignore[return-value]

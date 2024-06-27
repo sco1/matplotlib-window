@@ -9,6 +9,8 @@ PLOTOBJ_T: t.TypeAlias = tuple[Figure, Axes]
 
 
 @pytest.fixture
-def plotobj() -> tuple[Figure, Axes]:
+def plotobj() -> t.Generator[tuple[Figure, Axes], None, None]:
     fig, ax = plt.subplots()
-    return fig, ax
+    yield fig, ax
+
+    plt.close()
