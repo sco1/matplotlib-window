@@ -1,5 +1,7 @@
 import typing as t
+from collections import abc
 from enum import StrEnum
+from functools import partial
 
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import Event, FigureCanvasBase, MouseEvent
@@ -8,7 +10,7 @@ from matplotlib.patches import Rectangle
 from numpy import typing as npt
 
 COORD_T: t.TypeAlias = tuple[float, float]
-CALLBACK_T: t.TypeAlias = t.Callable[[Event], t.Any]
+CALLBACK_T: t.TypeAlias = abc.Callable[[Event], t.Any]
 PLOT_OBJ_T: t.TypeAlias = Line2D | Rectangle
 NUMERIC_T: t.TypeAlias = float | int
 
@@ -44,6 +46,7 @@ class _DraggableObject:
     # Defined by child classes prior to registration
     on_motion: CALLBACK_T
     snap_to: Line2D | None
+    redraw_callback: abc.Callable[[], None] | None
 
     # Defined on registration
     myobj: PLOT_OBJ_T
@@ -150,7 +153,7 @@ class _DraggableObject:
         self.clicked = False
         self.parent_canvas.mpl_disconnect(self.mouse_motion)
         self.parent_canvas.mpl_disconnect(self.click_release)
-        self.parent_canvas.draw()
+        self._redraw()
 
     def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
         """
@@ -177,6 +180,12 @@ class _DraggableObject:
         self.parent_canvas.mpl_disconnect(self.click_press)
         self.click_press = -1
 
+    def _redraw(self) -> None:
+        if self.redraw_callback is not None:
+            self.redraw_callback()
+
+        self.parent_canvas.draw()
+
 
 def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
     """Clamp the query value within the bounds of the provided dataset."""
@@ -198,6 +207,10 @@ class DragLine(_DraggableObject):
     `snap_to` may be optionally specified as an instance of another `Line2D` object to prevent
     dragging of the line beyond the extent of the plotted data.
 
+    `redraw_callback` may be optionally specified as a callable which gets called whenever the
+    location of the line has been changed. This callable is expected to take no arguments and has no
+    return.
+
     All kwargs not explicitly named by `__init__` are passed through to the `Line2D` constructor,
     allowing the user to specify custom line formatting in a form expected by `Line2D`.
     """
@@ -208,10 +221,12 @@ class DragLine(_DraggableObject):
         position: NUMERIC_T,
         orientation: Orientation = Orientation.VERTICAL,
         snap_to: Line2D | None = None,
+        redraw_callback: abc.Callable[[], None] | None = None,
         color: str = "limegreen",
         **kwargs: t.Any,
     ) -> None:
         self.orientation = orientation
+        self.redraw_callback = redraw_callback
 
         line_pos = (position, position)  # matplotlib expectes a coordinate pair
         if orientation == Orientation.HORIZONTAL:
@@ -252,9 +267,9 @@ class DragLine(_DraggableObject):
             if self.snap_to:
                 new_pos = limit_drag(self.snap_to.get_ydata(), event.ydata)
             else:
-                new_pos = event.xdata
+                new_pos = event.ydata
 
-            self.myobj.set_xdata(self.parent_axes.get_xlim())
+            self.myobj.set_ydata((new_pos, new_pos))
         elif self.orientation == Orientation.VERTICAL:
             if self.snap_to:
                 new_pos = limit_drag(self.snap_to.get_xdata(), event.xdata)
@@ -263,7 +278,7 @@ class DragLine(_DraggableObject):
 
             self.myobj.set_xdata((new_pos, new_pos))
 
-        self.parent_canvas.draw()
+        self._redraw()
 
     def limit_change(self, ax: Axes) -> None:
         """
@@ -276,7 +291,7 @@ class DragLine(_DraggableObject):
         else:
             self.myobj.set_ydata(ax.get_ylim())
 
-        self.parent_canvas.draw()
+        self._redraw()
 
     def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
         """
@@ -343,6 +358,10 @@ class DragRect(_DraggableObject):
     `snap_to` may be optionally specified as an instance of a `Line2D` object to prevent dragging of
     the rectangle beyond the extent of the plotted data.
 
+    `redraw_callback` may be optionally specified as a callable which gets called whenever the
+    location of the line has been changed. This callable is expected to take no arguments and has no
+    return.
+
     All kwargs not explicitly named by `__init__` are passed through to the `Rectangle` constructor,
     allowing the user to specify custom line formatting in a form expected by `Rectangle`.
 
@@ -355,6 +374,7 @@ class DragRect(_DraggableObject):
         position: NUMERIC_T,
         width: NUMERIC_T,
         snap_to: Line2D | None = None,
+        redraw_callback: abc.Callable[[], None] | None = None,
         edgecolor: str | None = "limegreen",
         facecolor: str = "limegreen",
         alpha: NUMERIC_T = 0.4,
@@ -362,6 +382,8 @@ class DragRect(_DraggableObject):
     ) -> None:
         if width <= 0:
             raise ValueError(f"Width value must be greater than 0. Received: {width}")
+
+        self.redraw_callback = None
 
         # Rectangle patches are located from their bottom left corner; because we want to span the
         # full y range, we need to translate the y position to the bottom of the axes
@@ -424,7 +446,7 @@ class DragRect(_DraggableObject):
         rect_params = transform_rect_params(self.parent_axes, new_x)
         self.myobj.xy = rect_params.xy
 
-        self.parent_canvas.draw()
+        self._redraw()
 
     def on_release(self, event: Event) -> t.Any:
         """
@@ -448,7 +470,7 @@ class DragRect(_DraggableObject):
         """
         rect_params = transform_rect_params(ax, 0)  # Doesn't matter what the x is, only need height
         self.myobj.set_height(rect_params.height)
-        self.parent_canvas.draw()
+        self._redraw()
 
     def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
         """
@@ -491,6 +513,10 @@ class FlexibleRect:
     `snap_to` may be optionally specified as an instance of a `Line2D` object to prevent dragging of
     the rectangle beyond the extent of the plotted data.
 
+    `redraw_callback` may be optionally specified as a callable which gets called whenever the
+    location of the line has been changed. This callable is expected to take no arguments and has no
+    return.
+
     NOTE: Motion is constrained to the x-axis only.
     """
 
@@ -500,6 +526,7 @@ class FlexibleRect:
         position: NUMERIC_T,
         width: NUMERIC_T,
         snap_to: Line2D | None = None,
+        redraw_callback: abc.Callable[[], None] | None = None,
         allow_face_drag: bool = False,
         edgecolor: str = "limegreen",
         facecolor: str = "limegreen",
@@ -508,20 +535,46 @@ class FlexibleRect:
         if width <= 0:
             raise ValueError(f"Width value must be greater than 0. Received: {width}")
 
+        self.parent_axes = ax
+        if ax.figure is not None:
+            self.parent_canvas = ax.figure.canvas
+        else:
+            raise ValueError("I don't know how we got here, but there's no figure.")
+
+        self.redraw_callback = redraw_callback
+
         # snap_to validation handled by DragRect & DragLine
         # Create edges after face so they're topmost & take click priority
         self.face = DragRect(
             ax=ax, position=position, width=width, facecolor=facecolor, edgecolor=None, alpha=alpha
         )
-        self.edges = [
-            DragLine(ax=ax, position=position, color=edgecolor, snap_to=snap_to),
-            DragLine(ax=ax, position=(position + width), color=edgecolor, snap_to=snap_to),
-        ]
+
+        line_p = partial(
+            DragLine,
+            ax=ax,
+            color=edgecolor,
+            snap_to=snap_to,
+            redraw_callback=self._respan_face,
+        )
+        self.edges = [line_p(position=position), line_p(position=(position + width))]
 
         if not allow_face_drag:
             self.face._disable_click()
         else:
             raise NotImplementedError
+
+    def _respan_face(self) -> None:
+        """Update face dimensions to span the entirety of the y-axes between the two edges."""
+        left = min(edge.location for edge in self.edges)
+        right = max(edge.location for edge in self.edges)
+
+        rect_params = transform_rect_params(self.parent_axes, left)
+        width = right - left
+
+        self.face.myobj.set_xy(rect_params.xy)
+        self.face.myobj.set_width(width)
+
+        self.parent_canvas.draw()  # Call directly to avoid infinitely spamming the callback
 
     @property
     def bounds(self) -> tuple[NUMERIC_T, NUMERIC_T]:
