@@ -34,7 +34,7 @@ jobs:
       run: uv build
 
     - name: Publish to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1.10
+      uses: pypa/gh-action-pypi-publish@release/v1.12
       with:
         print-hash: true
 
