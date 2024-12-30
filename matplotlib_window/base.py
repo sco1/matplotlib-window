@@ -3,6 +3,7 @@ from collections import abc
 from enum import StrEnum
 from functools import partial
 
+import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import Event, FigureCanvasBase, MouseEvent
 from matplotlib.lines import Line2D
@@ -192,6 +193,18 @@ def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
     # Data series may not be sorted, so use min/max
     # I'm not sure how to properly type annotate this right now
     min_val, max_val = plotted_data.min(), plotted_data.max()  # type: ignore[union-attr]
+
+    # Per #8, numpy's timedeltas don't support gt/lt so we need to extract a different value for our
+    # comparison if we're using them
+    # If the reach ends up being wider then it might be better to perform a more generic check but
+    # for now the explicit conversion should cover the currently encountered use cases
+    if isinstance(min_val, np.timedelta64):  # min_val and max_val should be the same type
+        # I couldn't figure out how to access the timedelta unit that numpy holds internally, but
+        # casting to float seems to work well enough to keep it in the same dimension being used for
+        # the plot
+        min_val = min_val.astype(float)
+        max_val = max_val.astype(float)
+
     if query > max_val:
         return max_val  # type: ignore[no-any-return]
     elif query < min_val:
