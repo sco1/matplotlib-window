@@ -125,6 +125,11 @@ class _DraggableObject:
         if event.inaxes != self.parent_axes:
             return
 
+        # Return early if we aren't able to obtain a widgetlock
+        # Obtaining a lock allows us to prevent dragging when zoom/pan is active
+        if not self.parent_canvas.widgetlock.available(self):
+            return
+
         if not self.should_move(event):
             return
 
@@ -136,6 +141,9 @@ class _DraggableObject:
 
         self.mouse_motion = self.parent_canvas.mpl_connect("motion_notify_event", self.on_motion)
         self.click_release = self.parent_canvas.mpl_connect("button_release_event", self.on_release)
+
+        # Obtaining a lock allows us to prevent dragging when zoom/pan is active
+        self.parent_canvas.widgetlock(self)
 
     def on_release(self, event: Event) -> t.Any:
         """
@@ -154,6 +162,10 @@ class _DraggableObject:
         self.clicked = False
         self.parent_canvas.mpl_disconnect(self.mouse_motion)
         self.parent_canvas.mpl_disconnect(self.click_release)
+
+        # Release any widgetlock when drag is finished
+        self.parent_canvas.widgetlock.release(self)
+
         self._redraw()
 
     def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
