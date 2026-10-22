@@ -493,7 +493,8 @@ class DragRect(_DraggableObject):
 
         Resize the rectangle to span the entirety of the y-axis if the axis limit is changed.
         """
-        rect_params = transform_rect_params(ax, 0)  # Doesn't matter what the x is, only need height
+        rect_params = transform_rect_params(ax, self.myobj.get_x())
+        self.myobj.set_xy(rect_params.xy)
         self.myobj.set_height(rect_params.height)
         self._redraw()
 

@@ -39,6 +39,16 @@ def test_dragrect_get_bounds(plotobj: PLOTOBJ_T) -> None:
     assert dr.bounds == (0, 1)
 
 
+def test_dragrect_limit_change_respans(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dr = DragRect(ax=ax, position=0.2, width=0.3)
+
+    ax.set_ylim(5, 15)
+
+    assert dr.myobj.get_xy() == pytest.approx((0.2, 5))
+    assert dr.myobj.get_height() == pytest.approx(10)
+
+
 def test_dragrect_click_disable(plotobj: PLOTOBJ_T) -> None:
     _, ax = plotobj
     dr = DragRect(ax=ax, position=0, width=1)
@@ -61,6 +71,16 @@ def test_flexrect_get_bounds(plotobj: PLOTOBJ_T) -> None:
     _, ax = plotobj
     dr = FlexibleRect(ax=ax, position=0, width=1)
     assert dr.bounds == (0, 1)
+
+
+def test_flexrect_limit_change_respans(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    fr = FlexibleRect(ax=ax, position=0.2, width=0.3)
+
+    ax.set_ylim(5, 15)
+
+    assert fr.face.myobj.get_xy() == pytest.approx((0.2, 5))
+    assert fr.face.myobj.get_height() == pytest.approx(10)
 
 
 def test_flexrect_disables_click(plotobj: PLOTOBJ_T) -> None:
