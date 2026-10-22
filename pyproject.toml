@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/sco1/"
+Homepage = "https://github.com/sco1/matplotlib-window"
 Documentation = "https://github.com/sco1/matplotlib-window/blob/main/README.md"
 Repository = "https://github.com/sco1/matplotlib-window.git"
 Issues = "https://github.com/sco1/matplotlib-window/issues"
@@ -82,5 +82,5 @@ module-name = "matplotlib_window"
 module-root = ""
 
 [build-system]
-requires = ["uv_build>=0.13.0,<0.14"]
+requires = ["uv_build>=0.13.4,<0.14"]
 build-backend = "uv_build"
