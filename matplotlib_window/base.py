@@ -408,7 +408,7 @@ class DragRect(_DraggableObject):
         if width <= 0:
             raise ValueError(f"Width value must be greater than 0. Received: {width}")
 
-        self.redraw_callback = None
+        self.redraw_callback = redraw_callback
 
         # Rectangle patches are located from their bottom left corner; because we want to span the
         # full y range, we need to translate the y position to the bottom of the axes
@@ -598,6 +598,9 @@ class FlexibleRect:
 
         self.face.myobj.set_xy(rect_params.xy)
         self.face.myobj.set_width(width)
+
+        if self.redraw_callback is not None:
+            self.redraw_callback()
 
         self.parent_canvas.draw()  # Call directly to avoid infinitely spamming the callback
 

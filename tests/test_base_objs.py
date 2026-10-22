@@ -1,4 +1,5 @@
 import pytest
+from pytest_mock import MockerFixture
 
 from matplotlib_window.base import DragLine, DragRect, FlexibleRect, Orientation
 from tests.conftest import PLOTOBJ_T
@@ -68,3 +69,33 @@ def test_flexrect_disables_click(plotobj: PLOTOBJ_T) -> None:
 
     parent_canvas = dr.face.parent_canvas
     assert not has_callback_to(parent_canvas, "DragRect")
+
+
+def test_dragline_redraw_callback(plotobj: PLOTOBJ_T, mocker: MockerFixture) -> None:
+    _, ax = plotobj
+    callback = mocker.Mock()
+    dl = DragLine(ax=ax, position=0, redraw_callback=callback)
+
+    ax.set_ylim(0, 10)  # Limit change triggers a redraw
+    callback.assert_called()
+    assert dl.redraw_callback is callback
+
+
+def test_dragrect_redraw_callback(plotobj: PLOTOBJ_T, mocker: MockerFixture) -> None:
+    _, ax = plotobj
+    callback = mocker.Mock()
+    dr = DragRect(ax=ax, position=0, width=1, redraw_callback=callback)
+
+    ax.set_ylim(0, 10)  # Limit change triggers a redraw
+    callback.assert_called()
+    assert dr.redraw_callback is callback
+
+
+def test_flexrect_redraw_callback(plotobj: PLOTOBJ_T, mocker: MockerFixture) -> None:
+    _, ax = plotobj
+    callback = mocker.Mock()
+    fr = FlexibleRect(ax=ax, position=0, width=1, redraw_callback=callback)
+
+    ax.set_ylim(0, 10)  # Limit change triggers a redraw
+    callback.assert_called()
+    assert fr.redraw_callback is callback
