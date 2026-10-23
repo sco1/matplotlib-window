@@ -1,8 +1,16 @@
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from matplotlib_window.base import NUMERIC_T, RectParams, limit_drag, transform_rect_params
+from matplotlib_window.base import (
+    NUMERIC_T,
+    RectParams,
+    get_native_data,
+    limit_drag,
+    transform_rect_params,
+)
+from tests.conftest import PLOTOBJ_T
 
 PLOTTED_DATA = np.array([1, 2, 3, 4, 5])
 LIMIT_DRAG_TEST_CASES = (
@@ -24,28 +32,30 @@ def test_limit_drag(query: NUMERIC_T, truth_out: NUMERIC_T) -> None:
     assert limit_drag(plotted_data=PLOTTED_DATA, query=query) == pytest.approx(truth_out)
 
 
-PLOTTED_TIMEDELTA = np.array([np.timedelta64(i, "D") for i in range(1, 6)])
-NP_TIMEDELTA_LIMIT_DRAG_TEST_CASES = (
-    (-1, 1),
-    (-1.0, 1),
-    (1, 1),
-    (1.0, 1.0),
-    (3, 3),
-    (3.0, 3),
-    (5, 5),
-    (5.0, 5),
-    (7, 5),
-    (7.0, 5),
-)
+def test_limit_drag_unsorted_data() -> None:
+    assert limit_drag(plotted_data=np.array([3, 5, 1, 4, 2]), query=7) == pytest.approx(5)
 
 
-@pytest.mark.parametrize(("query", "truth_out"), NP_TIMEDELTA_LIMIT_DRAG_TEST_CASES)
-def test_limit_np_timedelta_drag(query: NUMERIC_T, truth_out: NUMERIC_T) -> None:
-    assert limit_drag(plotted_data=PLOTTED_TIMEDELTA, query=query) == pytest.approx(truth_out)
+def test_get_native_data_numeric(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ls = ax.plot([1, 2, 3], [4, 5, 6])[0]
+
+    np.testing.assert_allclose(get_native_data(ls, "x"), [1, 2, 3])
+    np.testing.assert_allclose(get_native_data(ls, "y"), [4, 5, 6])
 
 
-def test_transform_rect() -> None:
-    _, ax = plt.subplots()
+def test_get_native_data_datetime(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dates = np.arange("2026-01-01", "2026-01-04", dtype="datetime64[D]")
+    ls = ax.plot(dates, dates)[0]
+
+    truth_data = mdates.date2num(dates)  # type: ignore[no-untyped-call]
+    np.testing.assert_allclose(get_native_data(ls, "x"), truth_data)
+    np.testing.assert_allclose(get_native_data(ls, "y"), truth_data)
+
+
+def test_transform_rect(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
     ax.set(xlim=(-10, 10), ylim=(-10, 10))
     truth_params = RectParams(xy=(0, -10), height=20)
 

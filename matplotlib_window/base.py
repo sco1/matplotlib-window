@@ -200,29 +200,31 @@ class _DraggableObject:
         self.parent_canvas.draw()
 
 
-def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
-    """Clamp the query value within the bounds of the provided dataset."""
-    # Data series may not be sorted, so use min/max
-    # I'm not sure how to properly type annotate this right now
-    min_val, max_val = plotted_data.min(), plotted_data.max()  # type: ignore[union-attr]
+def get_native_data(line: Line2D, axis: t.Literal["x", "y"]) -> npt.NDArray[np.float64]:
+    """
+    Return the line's data along the specified axis, converted to the axes' native float units.
 
-    # Per #8, numpy's timedeltas don't support gt/lt so we need to extract a different value for our
-    # comparison if we're using them
-    # If the reach ends up being wider then it might be better to perform a more generic check but
-    # for now the explicit conversion should cover the currently encountered use cases
-    if isinstance(min_val, np.timedelta64):  # min_val and max_val should be the same type
-        # I couldn't figure out how to access the timedelta unit that numpy holds internally, but
-        # casting to float seems to work well enough to keep it in the same dimension being used for
-        # the plot
-        min_val = min_val.astype(float)
-        max_val = max_val.astype(float)
-
-    if query > max_val:
-        return max_val  # type: ignore[no-any-return]
-    elif query < min_val:
-        return min_val  # type: ignore[no-any-return]
+    Plotted data may be of any type supported by matplotlib's unit conversion (e.g. datetimes or
+    timedeltas), but mouse event coordinates & axes limits are always provided in native units.
+    """
+    if axis == "x":
+        data = line.get_xdata(orig=False)
     else:
-        return query
+        data = line.get_ydata(orig=False)
+
+    return np.asarray(data, dtype=float)
+
+
+def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
+    """
+    Clamp the query value within the bounds of the provided dataset.
+
+    NOTE: `plotted_data` is assumed to be numeric & of the same units as `query`; see
+    `get_native_data` for converting plotted data to match event coordinates.
+    """
+    # Data series may not be sorted, so use min/max
+    data = np.asarray(plotted_data, dtype=float)
+    return float(np.clip(query, data.min(), data.max()))
 
 
 class DragLine(_DraggableObject):
@@ -290,14 +292,14 @@ class DragLine(_DraggableObject):
 
         if self.orientation == Orientation.HORIZONTAL:
             if self.snap_to:
-                new_pos = limit_drag(self.snap_to.get_ydata(), event.ydata)
+                new_pos = limit_drag(get_native_data(self.snap_to, "y"), event.ydata)
             else:
                 new_pos = event.ydata
 
             self.myobj.set_ydata((new_pos, new_pos))
         elif self.orientation == Orientation.VERTICAL:
             if self.snap_to:
-                new_pos = limit_drag(self.snap_to.get_xdata(), event.xdata)
+                new_pos = limit_drag(get_native_data(self.snap_to, "x"), event.xdata)
             else:
                 new_pos = event.xdata
 
@@ -337,11 +339,11 @@ class DragLine(_DraggableObject):
         # Check that the draggable line is within the bounds of the snap_to lineseries along its
         # axis of motion
         if self.orientation == Orientation.HORIZONTAL:
-            plotted_data = snap_to.get_ydata()
+            plotted_data = get_native_data(snap_to, "y")
         else:
-            plotted_data = snap_to.get_xdata()
+            plotted_data = get_native_data(snap_to, "x")
 
-        min_val, max_val = plotted_data.min(), plotted_data.max()  # type: ignore[union-attr]
+        min_val, max_val = plotted_data.min(), plotted_data.max()
         if not (min_val <= self.location <= max_val):
             raise ValueError("DragLine must be within the bounds of the provided snapto line")
 
@@ -464,12 +466,12 @@ class DragRect(_DraggableObject):
             if dx < 0:
                 # Moving left, check left edge
                 query = old_x + dx
-                new_x = limit_drag(self.snap_to.get_xdata(), query)
+                new_x = limit_drag(get_native_data(self.snap_to, "x"), query)
             else:
                 # Moving right, check right edge
                 width = self.myobj.get_width()
                 query = old_x + width + dx
-                new_x = limit_drag(self.snap_to.get_xdata(), query) - width
+                new_x = limit_drag(get_native_data(self.snap_to, "x"), query) - width
         else:
             new_x = old_x + dx
 
@@ -521,8 +523,8 @@ class DragRect(_DraggableObject):
 
         # Check that the draggable rectangle is within the bounds of the snap_to lineseries
         l_pos, r_pos = self.bounds
-        plotted_data = snap_to.get_xdata()
-        min_val, max_val = plotted_data.min(), plotted_data.max()  # type: ignore[union-attr]
+        plotted_data = get_native_data(snap_to, "x")
+        min_val, max_val = plotted_data.min(), plotted_data.max()
         if not (min_val <= l_pos <= max_val) or not (min_val <= r_pos <= max_val):
             raise ValueError("DragRect must be within the bounds of the provided snapto line")
 
