@@ -22,10 +22,10 @@ Plot the provided data & build a draggable fixed-width window to select bounds o
 | `position`     | x-coordinate of the left edge of the window                                 | `int\|float`           | Required         |
 | `window_width` | Width, along the x-axis, of the draggable window                            | `int\|float`           | Required         |
 | `snap_to_data` | Prevent dragging of the window beyond beyond the bounds of the plotted data | `bool`                 | `True`           |
-| `axes_kwargs`  | Optional kwargs to pass to the `Axes` constructor<sup>1</sup>               | `dict[str, Any]`       | `{"title": ...}` |
+| `axes_kwargs`  | Optional kwargs to pass to the `Axes` setter<sup>1</sup>                    | `dict[str, Any]`       | `{"title": ...}` |
 | `plot_kwargs`  | Optional kwargs to pass to the plotting call<sup>2</sup>                    | `dict[str, Any]`       | `{}`             |
 
-1. kwargs are passed directly to the `Axes` constructor, see the [`matplotlib.axes.Axes` documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.html#matplotlib.axes.Axes) for supported arguments.
+1. kwargs are passed directly to the `Axes` using `Axes.set()`, see the [`matplotlib.axes.Axes` documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.html#matplotlib.axes.Axes) for supported arguments.
 2. kwargs are passed directly to the plotting call, see the [`matplotlib.pyplot.plot` documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.plot.html) for supported arguments.
 
 ### `flexible_window`
@@ -40,9 +40,9 @@ Plot the provided data & build a flexible-width window to select bounds of inter
 | `window_width`    | Starting width, along the x-axis, of the flexible window                    | `int\|float`           | Required         |
 | `snap_to_data`    | Prevent dragging of the window beyond beyond the bounds of the plotted data | `bool`                 | `True`           |
 | `allow_face_drag` | Allow dragging of the window using its face<sup>1</sup>                     | `bool`                 | `False`          |
-| `axes_kwargs`     | Optional kwargs to pass to the `Axes` constructor<sup>2</sup>               | `dict[str, Any]`       | `{"title": ...}` |
+| `axes_kwargs`     | Optional kwargs to pass to the `Axes` setter<sup>2</sup>                    | `dict[str, Any]`       | `{"title": ...}` |
 | `plot_kwargs`     | Optional kwargs to pass to the plotting call<sup>3</sup>                    | `dict[str, Any]`       | `{}`             |
 
 1. Currently not implemented
-2. kwargs are passed directly to the `Axes` constructor, see the [`matplotlib.axes.Axes` documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.html#matplotlib.axes.Axes) for supported arguments.
+2. kwargs are passed directly to the `Axes` using `Axes.set()`, see the [`matplotlib.axes.Axes` documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.html#matplotlib.axes.Axes) for supported arguments.
 3. kwargs are passed directly to the plotting call, see the [`matplotlib.pyplot.plot` documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.plot.html) for supported arguments.

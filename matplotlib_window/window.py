@@ -18,8 +18,8 @@ def fixed_window(
     position: NUMERIC_T,
     window_width: NUMERIC_T,
     snap_to_data: bool = True,
-    axes_kwargs: dict[str, t.Any] = DEFAULT_AXES_KWARGS,
-    plot_kwargs: dict[str, t.Any] = DEFAULT_PLOT_KWARGS,
+    axes_kwargs: dict[str, t.Any] | None = None,
+    plot_kwargs: dict[str, t.Any] | None = None,
 ) -> tuple[NUMERIC_T, NUMERIC_T]:
     """
     Plot the provided data & build a draggable fixed-width window to select bounds of interest.
@@ -34,10 +34,15 @@ def fixed_window(
     `axes_kwargs` and `plot_kwargs` may be optionally specified to control the appearance of the
     resulting `Axes` and `Line2D` objects, respectively, and are passed straight through to their
     respective objects. Consult their respective documentation for available parameters.
+
+    NOTE: User specified axes/plot kwargs are merged with the module level defaults, where the user
+    input wins on conflict.
     """
     _, ax = plt.subplots()
-    ax.set(**axes_kwargs)
-    ls = ax.plot(x_data, y_data, **plot_kwargs)
+
+    # Merge any user defined axes/plot kwargs with default; user wins vs. default
+    ax.set(**(DEFAULT_AXES_KWARGS | (axes_kwargs or {})))
+    ls = ax.plot(x_data, y_data, **(DEFAULT_PLOT_KWARGS | (plot_kwargs or {})))
 
     if snap_to_data:
         snap_to = ls[0]
@@ -57,8 +62,8 @@ def flexible_window(
     window_width: NUMERIC_T,
     snap_to_data: bool = True,
     allow_face_drag: bool = False,
-    axes_kwargs: dict[str, t.Any] = DEFAULT_AXES_KWARGS,
-    plot_kwargs: dict[str, t.Any] = DEFAULT_PLOT_KWARGS,
+    axes_kwargs: dict[str, t.Any] | None = None,
+    plot_kwargs: dict[str, t.Any] | None = None,
 ) -> tuple[NUMERIC_T, NUMERIC_T]:
     """
     Plot the provided data & build a flexible-width window to select bounds of interest.
@@ -76,10 +81,15 @@ def flexible_window(
     `axes_kwargs` and `plot_kwargs` may be optionally specified to control the appearance of the
     resulting `Axes` and `Line2D` objects, respectively, and are passed straight through to their
     respective objects. Consult their respective documentation for available parameters.
+
+    NOTE: User specified axes/plot kwargs are merged with the module level defaults, where the user
+    input wins on conflict.
     """
     _, ax = plt.subplots()
-    ax.set(**axes_kwargs)
-    ls = ax.plot(x_data, y_data, **plot_kwargs)
+
+    # Merge any user defined axes/plot kwargs with default; user wins vs. default
+    ax.set(**(DEFAULT_AXES_KWARGS | (axes_kwargs or {})))
+    ls = ax.plot(x_data, y_data, **(DEFAULT_PLOT_KWARGS | (plot_kwargs or {})))
 
     if snap_to_data:
         snap_to = ls[0]
