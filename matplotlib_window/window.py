@@ -3,7 +3,7 @@ from collections import abc
 
 import matplotlib.pyplot as plt
 
-from matplotlib_window.base import DragRect, FlexibleRect, NUMERIC_T
+from matplotlib_window.base import DragRect, FlexibleRect, NUMERIC_T, UNIT_T
 
 DEFAULT_AXES_KWARGS: dict[str, t.Any] = {
     "title": "Close window to return selected window bounds",
@@ -13,13 +13,13 @@ DEFAULT_PLOT_KWARGS: dict[str, t.Any] = {}
 
 
 def fixed_window(
-    x_data: abc.Sequence[NUMERIC_T],
-    y_data: abc.Sequence[NUMERIC_T],
-    position: NUMERIC_T,
-    window_width: NUMERIC_T,
+    x_data: abc.Sequence[UNIT_T],
+    y_data: abc.Sequence[UNIT_T],
+    position: UNIT_T,
+    window_width: UNIT_T,
     snap_to_data: bool = True,
-    axes_kwargs: dict[str, t.Any] = DEFAULT_AXES_KWARGS,
-    plot_kwargs: dict[str, t.Any] = DEFAULT_PLOT_KWARGS,
+    axes_kwargs: dict[str, t.Any] | None = None,
+    plot_kwargs: dict[str, t.Any] | None = None,
 ) -> tuple[NUMERIC_T, NUMERIC_T]:
     """
     Plot the provided data & build a draggable fixed-width window to select bounds of interest.
@@ -28,16 +28,26 @@ def fixed_window(
 
     `position` specifies the x-coordinate of the left edge of the window.
 
+    NOTE: xy data, `position`, and `window_width` may be of any type supported by matplotlib's unit
+    conversion (e.g. datetimes & timedeltas), but the returned edge locations are always in the
+    axes' native float units; for datetime data these may be converted back using
+    `matplotlib.dates.num2date`.
+
     If `snap_to_data` is `True`, the window is prevented from being dragged beyond the bounds of the
     plotted data.
 
     `axes_kwargs` and `plot_kwargs` may be optionally specified to control the appearance of the
     resulting `Axes` and `Line2D` objects, respectively, and are passed straight through to their
     respective objects. Consult their respective documentation for available parameters.
+
+    NOTE: User specified axes/plot kwargs are merged with the module level defaults, where the user
+    input wins on conflict.
     """
     _, ax = plt.subplots()
-    ax.set(**axes_kwargs)
-    ls = ax.plot(x_data, y_data, **plot_kwargs)
+
+    # Merge any user defined axes/plot kwargs with default; user wins vs. default
+    ax.set(**(DEFAULT_AXES_KWARGS | (axes_kwargs or {})))
+    ls = ax.plot(x_data, y_data, **(DEFAULT_PLOT_KWARGS | (plot_kwargs or {})))
 
     if snap_to_data:
         snap_to = ls[0]
@@ -51,14 +61,14 @@ def fixed_window(
 
 
 def flexible_window(
-    x_data: abc.Sequence[NUMERIC_T],
-    y_data: abc.Sequence[NUMERIC_T],
-    position: NUMERIC_T,
-    window_width: NUMERIC_T,
+    x_data: abc.Sequence[UNIT_T],
+    y_data: abc.Sequence[UNIT_T],
+    position: UNIT_T,
+    window_width: UNIT_T,
     snap_to_data: bool = True,
     allow_face_drag: bool = False,
-    axes_kwargs: dict[str, t.Any] = DEFAULT_AXES_KWARGS,
-    plot_kwargs: dict[str, t.Any] = DEFAULT_PLOT_KWARGS,
+    axes_kwargs: dict[str, t.Any] | None = None,
+    plot_kwargs: dict[str, t.Any] | None = None,
 ) -> tuple[NUMERIC_T, NUMERIC_T]:
     """
     Plot the provided data & build a flexible-width window to select bounds of interest.
@@ -67,19 +77,28 @@ def flexible_window(
 
     `position` specifies the x-coordinate of the left edge of the window.
 
+    NOTE: xy data, `position`, and `window_width` may be of any type supported by matplotlib's unit
+    conversion (e.g. datetimes & timedeltas), but the returned edge locations are always in the
+    axes' native float units; for datetime data these may be converted back using
+    `matplotlib.dates.num2date`.
+
     If `snap_to_data` is `True`, the window is prevented from being dragged beyond the bounds of the
     plotted data.
 
-    If `allow_face_drag` is `True`, the entire window may be dragged using its face. NOTE: This is
-    currently not implemented.
+    If `allow_face_drag` is `True`, the entire window may also be dragged using its face.
 
     `axes_kwargs` and `plot_kwargs` may be optionally specified to control the appearance of the
     resulting `Axes` and `Line2D` objects, respectively, and are passed straight through to their
     respective objects. Consult their respective documentation for available parameters.
+
+    NOTE: User specified axes/plot kwargs are merged with the module level defaults, where the user
+    input wins on conflict.
     """
     _, ax = plt.subplots()
-    ax.set(**axes_kwargs)
-    ls = ax.plot(x_data, y_data, **plot_kwargs)
+
+    # Merge any user defined axes/plot kwargs with default; user wins vs. default
+    ax.set(**(DEFAULT_AXES_KWARGS | (axes_kwargs or {})))
+    ls = ax.plot(x_data, y_data, **(DEFAULT_PLOT_KWARGS | (plot_kwargs or {})))
 
     if snap_to_data:
         snap_to = ls[0]

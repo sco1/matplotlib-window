@@ -14,6 +14,8 @@ COORD_T: t.TypeAlias = tuple[float, float]
 CALLBACK_T: t.TypeAlias = abc.Callable[[Event], t.Any]
 PLOT_OBJ_T: t.TypeAlias = Line2D | Rectangle
 NUMERIC_T: t.TypeAlias = float | int
+# Any value supported by matplotlib's unit conversion (e.g. numeric, datetime, timedelta)
+UNIT_T: t.TypeAlias = t.Any
 
 COMMON_OBJ_ID = "dragobj"  # Label created object(s) URL for downstream event filtering
 
@@ -170,21 +172,25 @@ class _DraggableObject:
 
     def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
         """
-        Validate that the `snap_to` object, if provided, actually contains x data.
+        Validate that the `snap_to` object, if provided, actually contains lineseries xy data.
 
-        If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
-        Otherwise an exception is raised.
+        If `snap_to` is `None`, or is a plot object that contains at least one finite xy data point,
+        it is returned unchanged. Otherwise an exception is raised.
         """
         if snap_to is None:
             return None
 
         try:
-            xydata = snap_to.get_xydata()
+            xydata = np.asarray(snap_to.get_xydata())
         except AttributeError as e:
             raise ValueError("Cannot provide an empty lineseries to snapto") from e
 
-        if len(xydata) == 0:  # type: ignore[arg-type]
+        if len(xydata) == 0:
             raise ValueError("Cannot provide an empty lineseries to snapto")
+
+        # NaN gaps are fine, but there needs to be at least one plotted point to snap to
+        if not np.isfinite(xydata).all(axis=1).any():
+            raise ValueError("Cannot provide a lineseries without any finite data to snapto")
 
         return snap_to
 
@@ -200,29 +206,56 @@ class _DraggableObject:
         self.parent_canvas.draw()
 
 
-def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
-    """Clamp the query value within the bounds of the provided dataset."""
-    # Data series may not be sorted, so use min/max
-    # I'm not sure how to properly type annotate this right now
-    min_val, max_val = plotted_data.min(), plotted_data.max()  # type: ignore[union-attr]
+def get_native_data(line: Line2D, axis: t.Literal["x", "y"]) -> npt.NDArray[np.float64]:
+    """
+    Return the line's data along the specified axis, converted to the axes' native float units.
 
-    # Per #8, numpy's timedeltas don't support gt/lt so we need to extract a different value for our
-    # comparison if we're using them
-    # If the reach ends up being wider then it might be better to perform a more generic check but
-    # for now the explicit conversion should cover the currently encountered use cases
-    if isinstance(min_val, np.timedelta64):  # min_val and max_val should be the same type
-        # I couldn't figure out how to access the timedelta unit that numpy holds internally, but
-        # casting to float seems to work well enough to keep it in the same dimension being used for
-        # the plot
-        min_val = min_val.astype(float)
-        max_val = max_val.astype(float)
-
-    if query > max_val:
-        return max_val  # type: ignore[no-any-return]
-    elif query < min_val:
-        return min_val  # type: ignore[no-any-return]
+    Plotted data may be of any type supported by matplotlib's unit conversion (e.g. datetimes or
+    timedeltas), but mouse event coordinates & axes limits are always provided in native units.
+    """
+    if axis == "x":
+        data = line.get_xdata(orig=False)
     else:
-        return query
+        data = line.get_ydata(orig=False)
+
+    return np.asarray(data, dtype=float)
+
+
+def to_native(ax: Axes, value: UNIT_T, axis: t.Literal["x", "y"]) -> float:
+    """
+    Convert the provided value to the axes' native float units along the specified axis.
+
+    This mirrors the conversion performed by matplotlib when plotting data, so `value` may be of any
+    type supported by matplotlib's unit conversion (e.g. datetimes or timedeltas). Numeric values
+    are returned as floats.
+    """
+    ax_obj = ax.xaxis if axis == "x" else ax.yaxis
+    converted = ax_obj.convert_units(value)  # type: ignore[no-untyped-call]
+
+    # Types without a registered converter (e.g. timedelta64) are cast to float by matplotlib
+    return float(np.asarray(converted, dtype=np.float64))
+
+
+def to_native_span(ax: Axes, start: UNIT_T, span: UNIT_T, axis: t.Literal["x", "y"]) -> float:
+    """
+    Convert the provided span to the axes' native float units along the specified axis.
+
+    Spans may not be independently convertible (e.g. a timedelta on a datetime axis), so the span is
+    converted using its endpoints relative to `start`.
+    """
+    return to_native(ax, (start + span), axis) - to_native(ax, start, axis)
+
+
+def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
+    """
+    Clamp the query value within the bounds of the provided dataset.
+
+    NOTE: `plotted_data` is assumed to be numeric & of the same units as `query`; see
+    `get_native_data` for converting plotted data to match event coordinates.
+    """
+    # Data series may not be sorted, so use min/max; NaN-aware since plotted data may contain gaps
+    data = np.asarray(plotted_data, dtype=float)
+    return float(np.clip(query, np.nanmin(data), np.nanmax(data)))
 
 
 class DragLine(_DraggableObject):
@@ -238,12 +271,16 @@ class DragLine(_DraggableObject):
 
     All kwargs not explicitly named by `__init__` are passed through to the `Line2D` constructor,
     allowing the user to specify custom line formatting in a form expected by `Line2D`.
+
+    `position` may be of any type supported by matplotlib's unit conversion (e.g. datetimes), but is
+    converted to the axes' native float units on instantiation; `location` is always provided in
+    native units.
     """
 
     def __init__(
         self,
         ax: Axes,
-        position: NUMERIC_T,
+        position: UNIT_T,
         orientation: Orientation = Orientation.VERTICAL,
         snap_to: Line2D | None = None,
         redraw_callback: abc.Callable[[], None] | None = None,
@@ -252,6 +289,12 @@ class DragLine(_DraggableObject):
     ) -> None:
         self.orientation = orientation
         self.redraw_callback = redraw_callback
+
+        # Work in native units internally so positions are directly comparable to event coordinates
+        if orientation == Orientation.HORIZONTAL:
+            position = to_native(ax, position, "y")
+        else:
+            position = to_native(ax, position, "x")
 
         line_pos = (position, position)  # matplotlib expectes a coordinate pair
         if orientation == Orientation.HORIZONTAL:
@@ -290,14 +333,14 @@ class DragLine(_DraggableObject):
 
         if self.orientation == Orientation.HORIZONTAL:
             if self.snap_to:
-                new_pos = limit_drag(self.snap_to.get_ydata(), event.ydata)
+                new_pos = limit_drag(get_native_data(self.snap_to, "y"), event.ydata)
             else:
                 new_pos = event.ydata
 
             self.myobj.set_ydata((new_pos, new_pos))
         elif self.orientation == Orientation.VERTICAL:
             if self.snap_to:
-                new_pos = limit_drag(self.snap_to.get_xdata(), event.xdata)
+                new_pos = limit_drag(get_native_data(self.snap_to, "x"), event.xdata)
             else:
                 new_pos = event.xdata
 
@@ -320,10 +363,10 @@ class DragLine(_DraggableObject):
 
     def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
         """
-        Validate that the `snap_to` object, if provided, actually contains x data.
+        Validate that the `snap_to` object, if provided, bounds the line being created.
 
-        If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
-        Otherwise an exception is raised.
+        If `snap_to` is `None`, or is a plot object whose data along the line's axis of motion
+        contains the line's location, it is returned unchanged. Otherwise an exception is raised.
 
         NOTE: This should be called after the draggable object is registered so the object is
         instantiated & references are set.
@@ -334,9 +377,14 @@ class DragLine(_DraggableObject):
         # Superclass implementation handles checking that the lineseries contains data
         super().validate_snap_to(snap_to)
 
-        # Check that the draggable line is within the bounds of the snap_to lineseries
-        plotted_data = snap_to.get_xdata()
-        min_val, max_val = plotted_data.min(), plotted_data.max()  # type: ignore[union-attr]
+        # Check that the draggable line is within the bounds of the snap_to lineseries along its
+        # axis of motion
+        if self.orientation == Orientation.HORIZONTAL:
+            plotted_data = get_native_data(snap_to, "y")
+        else:
+            plotted_data = get_native_data(snap_to, "x")
+
+        min_val, max_val = np.nanmin(plotted_data), np.nanmax(plotted_data)
         if not (min_val <= self.location <= max_val):
             raise ValueError("DragLine must be within the bounds of the provided snapto line")
 
@@ -352,6 +400,18 @@ class DragLine(_DraggableObject):
             pos = self.myobj.get_ydata()  # type: ignore[assignment]
 
         return pos[0]  # Should be a (location, location) tuple
+
+    def set_location(self, position: NUMERIC_T) -> None:
+        """
+        Set the location of the `DragLine` along its relevant axis, in native axes units.
+
+        NOTE: The canvas is not redrawn & `redraw_callback` is not called; the caller is responsible
+        for redrawing as needed.
+        """
+        if self.orientation == Orientation.VERTICAL:
+            self.myobj.set_xdata((position, position))
+        else:
+            self.myobj.set_ydata((position, position))
 
 
 class RectParams(t.NamedTuple):  # noqa: D101
@@ -390,14 +450,22 @@ class DragRect(_DraggableObject):
     All kwargs not explicitly named by `__init__` are passed through to the `Rectangle` constructor,
     allowing the user to specify custom line formatting in a form expected by `Rectangle`.
 
+    `position` and `width` may be of any type supported by matplotlib's unit conversion (e.g. a
+    datetime & timedelta), but are converted to the axes' native float units on instantiation;
+    `bounds` is always provided in native units.
+
     NOTE: Motion is constrained to the x-axis only.
     """
+
+    # Left edge location when the current drag started, used for drag deltas so the object doesn't
+    # jump to the cursor
+    drag_start_x: float
 
     def __init__(
         self,
         ax: Axes,
-        position: NUMERIC_T,
-        width: NUMERIC_T,
+        position: UNIT_T,
+        width: UNIT_T,
         snap_to: Line2D | None = None,
         redraw_callback: abc.Callable[[], None] | None = None,
         edgecolor: str | None = "limegreen",
@@ -405,10 +473,15 @@ class DragRect(_DraggableObject):
         alpha: NUMERIC_T = 0.4,
         **kwargs: t.Any,
     ) -> None:
-        if width <= 0:
+        # Work in native units internally so positions are directly comparable to event coordinates
+        native_width = to_native_span(ax, position, width, "x")
+        if native_width <= 0:
             raise ValueError(f"Width value must be greater than 0. Received: {width}")
 
-        self.redraw_callback = None
+        position = to_native(ax, position, "x")
+        width = native_width
+
+        self.redraw_callback = redraw_callback
 
         # Rectangle patches are located from their bottom left corner; because we want to span the
         # full y range, we need to translate the y position to the bottom of the axes
@@ -424,11 +497,24 @@ class DragRect(_DraggableObject):
             **kwargs,
         )
 
-        self.oldxy = rect_params.xy  # Used for drag deltas so the object doesn't jump to cursor
         self.register_plot_object(obj, ax)
         self.axes_limit_change = ax.callbacks.connect("ylim_changed", self.limit_change)
 
         self.snap_to = self.validate_snap_to(snap_to)
+
+    def on_click(self, event: Event) -> t.Any:
+        """
+        Mouse click callback.
+
+        In addition to the common click handling, cache the location of the left edge if a drag is
+        started. This is cached at the start of every drag, rather than at the end of the previous
+        one, so it remains correct if the rectangle is moved by other means between drags (e.g. by
+        a `FlexibleRect`'s edges).
+        """
+        super().on_click(event)
+
+        if self.clicked:
+            self.drag_start_x = self.myobj.get_x()
 
     def on_motion(self, event: Event) -> t.Any:
         """
@@ -453,18 +539,18 @@ class DragRect(_DraggableObject):
         # of the bottom left corner when the object was clicked on. Because we can click anywhere on
         # the patch to begin motion, the patch will jump to the mouse if just using the location of
         # the MouseEvent.
-        old_x, _ = self.oldxy
+        old_x = self.drag_start_x
         dx = event.xdata - self.click_x
         if self.snap_to:
             if dx < 0:
                 # Moving left, check left edge
                 query = old_x + dx
-                new_x = limit_drag(self.snap_to.get_xdata(), query)
+                new_x = limit_drag(get_native_data(self.snap_to, "x"), query)
             else:
                 # Moving right, check right edge
                 width = self.myobj.get_width()
                 query = old_x + width + dx
-                new_x = limit_drag(self.snap_to.get_xdata(), query) - width
+                new_x = limit_drag(get_native_data(self.snap_to, "x"), query) - width
         else:
             new_x = old_x + dx
 
@@ -473,27 +559,14 @@ class DragRect(_DraggableObject):
 
         self._redraw()
 
-    def on_release(self, event: Event) -> t.Any:
-        """
-        Mouse button release callback.
-
-        When the mouse button is released, cache the new corner location & disconnect the callbacks
-        connected by `self.on_click`.
-        """
-        if not isinstance(event, MouseEvent):
-            # Type narrowing, matplotlib dispatches a MouseEvent here so shouldn't ever trip this
-            return
-
-        self.oldxy = self.myobj.get_xy()
-        self.disconnect()
-
     def limit_change(self, ax: Axes) -> None:
         """
         Axes limit change callback.
 
         Resize the rectangle to span the entirety of the y-axis if the axis limit is changed.
         """
-        rect_params = transform_rect_params(ax, 0)  # Doesn't matter what the x is, only need height
+        rect_params = transform_rect_params(ax, self.myobj.get_x())
+        self.myobj.set_xy(rect_params.xy)
         self.myobj.set_height(rect_params.height)
         self._redraw()
 
@@ -515,8 +588,8 @@ class DragRect(_DraggableObject):
 
         # Check that the draggable rectangle is within the bounds of the snap_to lineseries
         l_pos, r_pos = self.bounds
-        plotted_data = snap_to.get_xdata()
-        min_val, max_val = plotted_data.min(), plotted_data.max()  # type: ignore[union-attr]
+        plotted_data = get_native_data(snap_to, "x")
+        min_val, max_val = np.nanmin(plotted_data), np.nanmax(plotted_data)
         if not (min_val <= l_pos <= max_val) or not (min_val <= r_pos <= max_val):
             raise ValueError("DragRect must be within the bounds of the provided snapto line")
 
@@ -542,14 +615,20 @@ class FlexibleRect:
     location of the line has been changed. This callable is expected to take no arguments and has no
     return.
 
+    `position` and `width` may be of any type supported by matplotlib's unit conversion (e.g. a
+    datetime & timedelta), but are converted to the axes' native float units on instantiation;
+    `bounds` is always provided in native units.
+
+    If `allow_face_drag` is `True`, the entire rectangle may also be dragged using its face.
+
     NOTE: Motion is constrained to the x-axis only.
     """
 
     def __init__(
         self,
         ax: Axes,
-        position: NUMERIC_T,
-        width: NUMERIC_T,
+        position: UNIT_T,
+        width: UNIT_T,
         snap_to: Line2D | None = None,
         redraw_callback: abc.Callable[[], None] | None = None,
         allow_face_drag: bool = False,
@@ -557,8 +636,13 @@ class FlexibleRect:
         facecolor: str = "limegreen",
         alpha: NUMERIC_T = 0.4,
     ) -> None:
-        if width <= 0:
+        # Work in native units internally so the edge positions can be calculated directly
+        native_width = to_native_span(ax, position, width, "x")
+        if native_width <= 0:
             raise ValueError(f"Width value must be greater than 0. Received: {width}")
+
+        position = to_native(ax, position, "x")
+        width = native_width
 
         self.parent_axes = ax
         if ax.figure is not None:
@@ -570,8 +654,16 @@ class FlexibleRect:
 
         # snap_to validation handled by DragRect & DragLine
         # Create edges after face so they're topmost & take click priority
+        # If the face is draggable, it snaps as a whole & drags the edges along with it
         self.face = DragRect(
-            ax=ax, position=position, width=width, facecolor=facecolor, edgecolor=None, alpha=alpha
+            ax=ax,
+            position=position,
+            width=width,
+            snap_to=(snap_to if allow_face_drag else None),
+            redraw_callback=(self._move_edges if allow_face_drag else None),
+            facecolor=facecolor,
+            edgecolor=None,
+            alpha=alpha,
         )
 
         line_p = partial(
@@ -585,8 +677,18 @@ class FlexibleRect:
 
         if not allow_face_drag:
             self.face._disable_click()
-        else:
-            raise NotImplementedError
+
+    def _move_edges(self) -> None:
+        """Move the edges to the bounds of the face, called when the face has been dragged."""
+        left, right = self.face.bounds
+
+        # Edges may have been dragged past each other, so match them to the face by location
+        left_edge, right_edge = sorted(self.edges, key=lambda edge: edge.location)
+        left_edge.set_location(left)
+        right_edge.set_location(right)
+
+        if self.redraw_callback is not None:
+            self.redraw_callback()
 
     def _respan_face(self) -> None:
         """Update face dimensions to span the entirety of the y-axes between the two edges."""
@@ -598,6 +700,9 @@ class FlexibleRect:
 
         self.face.myobj.set_xy(rect_params.xy)
         self.face.myobj.set_width(width)
+
+        if self.redraw_callback is not None:
+            self.redraw_callback()
 
         self.parent_canvas.draw()  # Call directly to avoid infinitely spamming the callback
 
