@@ -3,7 +3,7 @@ from collections import abc
 
 import matplotlib.pyplot as plt
 
-from matplotlib_window.base import DragRect, FlexibleRect, NUMERIC_T
+from matplotlib_window.base import DragRect, FlexibleRect, NUMERIC_T, UNIT_T
 
 DEFAULT_AXES_KWARGS: dict[str, t.Any] = {
     "title": "Close window to return selected window bounds",
@@ -13,10 +13,10 @@ DEFAULT_PLOT_KWARGS: dict[str, t.Any] = {}
 
 
 def fixed_window(
-    x_data: abc.Sequence[NUMERIC_T],
-    y_data: abc.Sequence[NUMERIC_T],
-    position: NUMERIC_T,
-    window_width: NUMERIC_T,
+    x_data: abc.Sequence[UNIT_T],
+    y_data: abc.Sequence[UNIT_T],
+    position: UNIT_T,
+    window_width: UNIT_T,
     snap_to_data: bool = True,
     axes_kwargs: dict[str, t.Any] | None = None,
     plot_kwargs: dict[str, t.Any] | None = None,
@@ -27,6 +27,11 @@ def fixed_window(
     The x-locations of the edges of the window are returned once the figure window is closed.
 
     `position` specifies the x-coordinate of the left edge of the window.
+
+    NOTE: xy data, `position`, and `window_width` may be of any type supported by matplotlib's unit
+    conversion (e.g. datetimes & timedeltas), but the returned edge locations are always in the
+    axes' native float units; for datetime data these may be converted back using
+    `matplotlib.dates.num2date`.
 
     If `snap_to_data` is `True`, the window is prevented from being dragged beyond the bounds of the
     plotted data.
@@ -56,10 +61,10 @@ def fixed_window(
 
 
 def flexible_window(
-    x_data: abc.Sequence[NUMERIC_T],
-    y_data: abc.Sequence[NUMERIC_T],
-    position: NUMERIC_T,
-    window_width: NUMERIC_T,
+    x_data: abc.Sequence[UNIT_T],
+    y_data: abc.Sequence[UNIT_T],
+    position: UNIT_T,
+    window_width: UNIT_T,
     snap_to_data: bool = True,
     allow_face_drag: bool = False,
     axes_kwargs: dict[str, t.Any] | None = None,
@@ -71,6 +76,11 @@ def flexible_window(
     The x-locations of the edges of the window are returned once the figure window is closed.
 
     `position` specifies the x-coordinate of the left edge of the window.
+
+    NOTE: xy data, `position`, and `window_width` may be of any type supported by matplotlib's unit
+    conversion (e.g. datetimes & timedeltas), but the returned edge locations are always in the
+    axes' native float units; for datetime data these may be converted back using
+    `matplotlib.dates.num2date`.
 
     If `snap_to_data` is `True`, the window is prevented from being dragged beyond the bounds of the
     plotted data.

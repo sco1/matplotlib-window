@@ -8,6 +8,7 @@ from matplotlib.lines import Line2D
 from matplotlib_window.base import (
     DragLine,
     DragRect,
+    FlexibleRect,
     Orientation,
     _DraggableObject,
     get_native_data,
@@ -305,3 +306,68 @@ def test_dragrect_snapto_data_types_out_of_bounds_raises(data: t.Any, plotobj: P
 
     with pytest.raises(ValueError, match="bounds"):
         _ = DragRect(ax, position=hi, width=span, snap_to=ls)
+
+
+# Positions & widths may also be provided in the plotted data's own units (e.g. a datetime &
+# timedelta), but are always reported back in the axes' native float units
+@SNAP_TO_DATA_PARAMS
+def test_vertical_dragline_data_type_position(data: t.Any, plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ls = ax.plot(data, range(5))[0]
+    native = get_native_data(ls, "x")
+
+    dl = DragLine(ax, position=data[1], orientation=Orientation.VERTICAL, snap_to=ls)
+    assert isinstance(dl.location, float)
+    assert dl.location == pytest.approx(native[1])
+
+
+@SNAP_TO_DATA_PARAMS
+def test_horizontal_dragline_data_type_position(data: t.Any, plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ls = ax.plot(range(5), data)[0]
+    native = get_native_data(ls, "y")
+
+    dl = DragLine(ax, position=data[1], orientation=Orientation.HORIZONTAL, snap_to=ls)
+    assert isinstance(dl.location, float)
+    assert dl.location == pytest.approx(native[1])
+
+
+@SNAP_TO_DATA_PARAMS
+def test_dragrect_data_type_position_width(data: t.Any, plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ls = ax.plot(data, range(5))[0]
+    native = get_native_data(ls, "x")
+
+    dr = DragRect(ax, position=data[1], width=(data[2] - data[1]), snap_to=ls)
+    assert all(isinstance(edge, float) for edge in dr.bounds)
+    assert dr.bounds == pytest.approx((native[1], native[2]))
+
+
+@SNAP_TO_DATA_PARAMS
+def test_flexrect_data_type_position_width(data: t.Any, plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ls = ax.plot(data, range(5))[0]
+    native = get_native_data(ls, "x")
+
+    fr = FlexibleRect(ax, position=data[1], width=(data[2] - data[1]), snap_to=ls)
+    assert all(isinstance(edge, float) for edge in fr.bounds)
+    assert fr.bounds == pytest.approx((native[1], native[2]))
+    assert fr.face.bounds == pytest.approx((native[1], native[2]))
+
+
+@SNAP_TO_DATA_PARAMS
+def test_dragrect_data_type_negative_width_raises(data: t.Any, plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ax.plot(data, range(5))
+
+    with pytest.raises(ValueError, match="greater than"):
+        _ = DragRect(ax, position=data[2], width=(data[1] - data[2]))
+
+
+@SNAP_TO_DATA_PARAMS
+def test_flexrect_data_type_negative_width_raises(data: t.Any, plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ax.plot(data, range(5))
+
+    with pytest.raises(ValueError, match="greater than"):
+        _ = FlexibleRect(ax, position=data[2], width=(data[1] - data[2]))

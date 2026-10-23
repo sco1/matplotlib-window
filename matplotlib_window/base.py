@@ -14,6 +14,8 @@ COORD_T: t.TypeAlias = tuple[float, float]
 CALLBACK_T: t.TypeAlias = abc.Callable[[Event], t.Any]
 PLOT_OBJ_T: t.TypeAlias = Line2D | Rectangle
 NUMERIC_T: t.TypeAlias = float | int
+# Any value supported by matplotlib's unit conversion (e.g. numeric, datetime, timedelta)
+UNIT_T: t.TypeAlias = t.Any
 
 COMMON_OBJ_ID = "dragobj"  # Label created object(s) URL for downstream event filtering
 
@@ -219,6 +221,31 @@ def get_native_data(line: Line2D, axis: t.Literal["x", "y"]) -> npt.NDArray[np.f
     return np.asarray(data, dtype=float)
 
 
+def to_native(ax: Axes, value: UNIT_T, axis: t.Literal["x", "y"]) -> float:
+    """
+    Convert the provided value to the axes' native float units along the specified axis.
+
+    This mirrors the conversion performed by matplotlib when plotting data, so `value` may be of any
+    type supported by matplotlib's unit conversion (e.g. datetimes or timedeltas). Numeric values
+    are returned as floats.
+    """
+    ax_obj = ax.xaxis if axis == "x" else ax.yaxis
+    converted = ax_obj.convert_units(value)  # type: ignore[no-untyped-call]
+
+    # Types without a registered converter (e.g. timedelta64) are cast to float by matplotlib
+    return float(np.asarray(converted, dtype=np.float64))
+
+
+def to_native_span(ax: Axes, start: UNIT_T, span: UNIT_T, axis: t.Literal["x", "y"]) -> float:
+    """
+    Convert the provided span to the axes' native float units along the specified axis.
+
+    Spans may not be independently convertible (e.g. a timedelta on a datetime axis), so the span is
+    converted using its endpoints relative to `start`.
+    """
+    return to_native(ax, (start + span), axis) - to_native(ax, start, axis)
+
+
 def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
     """
     Clamp the query value within the bounds of the provided dataset.
@@ -244,12 +271,16 @@ class DragLine(_DraggableObject):
 
     All kwargs not explicitly named by `__init__` are passed through to the `Line2D` constructor,
     allowing the user to specify custom line formatting in a form expected by `Line2D`.
+
+    `position` may be of any type supported by matplotlib's unit conversion (e.g. datetimes), but is
+    converted to the axes' native float units on instantiation; `location` is always provided in
+    native units.
     """
 
     def __init__(
         self,
         ax: Axes,
-        position: NUMERIC_T,
+        position: UNIT_T,
         orientation: Orientation = Orientation.VERTICAL,
         snap_to: Line2D | None = None,
         redraw_callback: abc.Callable[[], None] | None = None,
@@ -258,6 +289,12 @@ class DragLine(_DraggableObject):
     ) -> None:
         self.orientation = orientation
         self.redraw_callback = redraw_callback
+
+        # Work in native units internally so positions are directly comparable to event coordinates
+        if orientation == Orientation.HORIZONTAL:
+            position = to_native(ax, position, "y")
+        else:
+            position = to_native(ax, position, "x")
 
         line_pos = (position, position)  # matplotlib expectes a coordinate pair
         if orientation == Orientation.HORIZONTAL:
@@ -401,14 +438,18 @@ class DragRect(_DraggableObject):
     All kwargs not explicitly named by `__init__` are passed through to the `Rectangle` constructor,
     allowing the user to specify custom line formatting in a form expected by `Rectangle`.
 
+    `position` and `width` may be of any type supported by matplotlib's unit conversion (e.g. a
+    datetime & timedelta), but are converted to the axes' native float units on instantiation;
+    `bounds` is always provided in native units.
+
     NOTE: Motion is constrained to the x-axis only.
     """
 
     def __init__(
         self,
         ax: Axes,
-        position: NUMERIC_T,
-        width: NUMERIC_T,
+        position: UNIT_T,
+        width: UNIT_T,
         snap_to: Line2D | None = None,
         redraw_callback: abc.Callable[[], None] | None = None,
         edgecolor: str | None = "limegreen",
@@ -416,8 +457,13 @@ class DragRect(_DraggableObject):
         alpha: NUMERIC_T = 0.4,
         **kwargs: t.Any,
     ) -> None:
-        if width <= 0:
+        # Work in native units internally so positions are directly comparable to event coordinates
+        native_width = to_native_span(ax, position, width, "x")
+        if native_width <= 0:
             raise ValueError(f"Width value must be greater than 0. Received: {width}")
+
+        position = to_native(ax, position, "x")
+        width = native_width
 
         self.redraw_callback = redraw_callback
 
@@ -554,14 +600,18 @@ class FlexibleRect:
     location of the line has been changed. This callable is expected to take no arguments and has no
     return.
 
+    `position` and `width` may be of any type supported by matplotlib's unit conversion (e.g. a
+    datetime & timedelta), but are converted to the axes' native float units on instantiation;
+    `bounds` is always provided in native units.
+
     NOTE: Motion is constrained to the x-axis only.
     """
 
     def __init__(
         self,
         ax: Axes,
-        position: NUMERIC_T,
-        width: NUMERIC_T,
+        position: UNIT_T,
+        width: UNIT_T,
         snap_to: Line2D | None = None,
         redraw_callback: abc.Callable[[], None] | None = None,
         allow_face_drag: bool = False,
@@ -569,8 +619,13 @@ class FlexibleRect:
         facecolor: str = "limegreen",
         alpha: NUMERIC_T = 0.4,
     ) -> None:
-        if width <= 0:
+        # Work in native units internally so the edge positions can be calculated directly
+        native_width = to_native_span(ax, position, width, "x")
+        if native_width <= 0:
             raise ValueError(f"Width value must be greater than 0. Received: {width}")
+
+        position = to_native(ax, position, "x")
+        width = native_width
 
         self.parent_axes = ax
         if ax.figure is not None:
