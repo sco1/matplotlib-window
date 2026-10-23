@@ -401,6 +401,18 @@ class DragLine(_DraggableObject):
 
         return pos[0]  # Should be a (location, location) tuple
 
+    def set_location(self, position: NUMERIC_T) -> None:
+        """
+        Set the location of the `DragLine` along its relevant axis, in native axes units.
+
+        NOTE: The canvas is not redrawn & `redraw_callback` is not called; the caller is responsible
+        for redrawing as needed.
+        """
+        if self.orientation == Orientation.VERTICAL:
+            self.myobj.set_xdata((position, position))
+        else:
+            self.myobj.set_ydata((position, position))
+
 
 class RectParams(t.NamedTuple):  # noqa: D101
     xy: COORD_T
@@ -445,6 +457,10 @@ class DragRect(_DraggableObject):
     NOTE: Motion is constrained to the x-axis only.
     """
 
+    # Left edge location when the current drag started, used for drag deltas so the object doesn't
+    # jump to the cursor
+    drag_start_x: float
+
     def __init__(
         self,
         ax: Axes,
@@ -481,11 +497,24 @@ class DragRect(_DraggableObject):
             **kwargs,
         )
 
-        self.oldxy = rect_params.xy  # Used for drag deltas so the object doesn't jump to cursor
         self.register_plot_object(obj, ax)
         self.axes_limit_change = ax.callbacks.connect("ylim_changed", self.limit_change)
 
         self.snap_to = self.validate_snap_to(snap_to)
+
+    def on_click(self, event: Event) -> t.Any:
+        """
+        Mouse click callback.
+
+        In addition to the common click handling, cache the location of the left edge if a drag is
+        started. This is cached at the start of every drag, rather than at the end of the previous
+        one, so it remains correct if the rectangle is moved by other means between drags (e.g. by
+        a `FlexibleRect`'s edges).
+        """
+        super().on_click(event)
+
+        if self.clicked:
+            self.drag_start_x = self.myobj.get_x()
 
     def on_motion(self, event: Event) -> t.Any:
         """
@@ -510,7 +539,7 @@ class DragRect(_DraggableObject):
         # of the bottom left corner when the object was clicked on. Because we can click anywhere on
         # the patch to begin motion, the patch will jump to the mouse if just using the location of
         # the MouseEvent.
-        old_x, _ = self.oldxy
+        old_x = self.drag_start_x
         dx = event.xdata - self.click_x
         if self.snap_to:
             if dx < 0:
@@ -529,20 +558,6 @@ class DragRect(_DraggableObject):
         self.myobj.xy = rect_params.xy
 
         self._redraw()
-
-    def on_release(self, event: Event) -> t.Any:
-        """
-        Mouse button release callback.
-
-        When the mouse button is released, cache the new corner location & disconnect the callbacks
-        connected by `self.on_click`.
-        """
-        if not isinstance(event, MouseEvent):
-            # Type narrowing, matplotlib dispatches a MouseEvent here so shouldn't ever trip this
-            return
-
-        self.oldxy = self.myobj.get_xy()
-        self.disconnect()
 
     def limit_change(self, ax: Axes) -> None:
         """
@@ -604,6 +619,8 @@ class FlexibleRect:
     datetime & timedelta), but are converted to the axes' native float units on instantiation;
     `bounds` is always provided in native units.
 
+    If `allow_face_drag` is `True`, the entire rectangle may also be dragged using its face.
+
     NOTE: Motion is constrained to the x-axis only.
     """
 
@@ -637,8 +654,16 @@ class FlexibleRect:
 
         # snap_to validation handled by DragRect & DragLine
         # Create edges after face so they're topmost & take click priority
+        # If the face is draggable, it snaps as a whole & drags the edges along with it
         self.face = DragRect(
-            ax=ax, position=position, width=width, facecolor=facecolor, edgecolor=None, alpha=alpha
+            ax=ax,
+            position=position,
+            width=width,
+            snap_to=(snap_to if allow_face_drag else None),
+            redraw_callback=(self._move_edges if allow_face_drag else None),
+            facecolor=facecolor,
+            edgecolor=None,
+            alpha=alpha,
         )
 
         line_p = partial(
@@ -652,8 +677,18 @@ class FlexibleRect:
 
         if not allow_face_drag:
             self.face._disable_click()
-        else:
-            raise NotImplementedError
+
+    def _move_edges(self) -> None:
+        """Move the edges to the bounds of the face, called when the face has been dragged."""
+        left, right = self.face.bounds
+
+        # Edges may have been dragged past each other, so match them to the face by location
+        left_edge, right_edge = sorted(self.edges, key=lambda edge: edge.location)
+        left_edge.set_location(left)
+        right_edge.set_location(right)
+
+        if self.redraw_callback is not None:
+            self.redraw_callback()
 
     def _respan_face(self) -> None:
         """Update face dimensions to span the entirety of the y-axes between the two edges."""

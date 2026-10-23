@@ -85,8 +85,7 @@ def flexible_window(
     If `snap_to_data` is `True`, the window is prevented from being dragged beyond the bounds of the
     plotted data.
 
-    If `allow_face_drag` is `True`, the entire window may be dragged using its face. NOTE: This is
-    currently not implemented.
+    If `allow_face_drag` is `True`, the entire window may also be dragged using its face.
 
     `axes_kwargs` and `plot_kwargs` may be optionally specified to control the appearance of the
     resulting `Axes` and `Line2D` objects, respectively, and are passed straight through to their
