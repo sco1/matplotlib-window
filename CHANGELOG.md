@@ -5,6 +5,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) (`<ma
 ### Changed
 * Windowing helper utilities now merge user-specified axes/plot kwargs with defaults, preferring user inputs
 * (Internal) Snap checking now utilizes axes native data rather than having to special case multiple numpy datatypes to prevent errors
+* Add `NaN` awareness to prevent unexpected behavior when working with datasets containing gaps
 
 ### Fixed
 * Fix `DragRect` completely ignoring user-specified redraw callbacks

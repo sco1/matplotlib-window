@@ -1,5 +1,4 @@
 import matplotlib.dates as mdates
-import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
@@ -34,6 +33,14 @@ def test_limit_drag(query: NUMERIC_T, truth_out: NUMERIC_T) -> None:
 
 def test_limit_drag_unsorted_data() -> None:
     assert limit_drag(plotted_data=np.array([3, 5, 1, 4, 2]), query=7) == pytest.approx(5)
+
+
+GAPPED_DATA = np.array([np.nan, 1, 2, np.nan, 4, 5, np.nan])
+
+
+@pytest.mark.parametrize(("query", "truth_out"), LIMIT_DRAG_TEST_CASES)
+def test_limit_drag_nan_gaps(query: NUMERIC_T, truth_out: NUMERIC_T) -> None:
+    assert limit_drag(plotted_data=GAPPED_DATA, query=query) == pytest.approx(truth_out)
 
 
 def test_get_native_data_numeric(plotobj: PLOTOBJ_T) -> None:

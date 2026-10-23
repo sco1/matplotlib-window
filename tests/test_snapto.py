@@ -56,6 +56,89 @@ def test_dragrect_snapto_empty_data_raises(plotobj: PLOTOBJ_T) -> None:
         dr.validate_snap_to(EMPTY_LINE)
 
 
+ALL_NAN_LINE = Line2D(xdata=np.full(3, np.nan), ydata=np.full(3, np.nan))
+
+
+def test_dragobj_snapto_all_nan_data_raises() -> None:
+    do = _DraggableObject()
+    with pytest.raises(ValueError, match="finite"):
+        do.validate_snap_to(ALL_NAN_LINE)
+
+
+def test_dragline_snapto_all_nan_data_raises(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dl = DragLine(ax=ax, position=0)
+    with pytest.raises(ValueError, match="finite"):
+        dl.validate_snap_to(ALL_NAN_LINE)
+
+
+def test_dragrect_snapto_all_nan_data_raises(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dr = DragRect(ax=ax, position=0, width=1)
+    with pytest.raises(ValueError, match="finite"):
+        dr.validate_snap_to(ALL_NAN_LINE)
+
+
+# NaN gaps, including at the ends, are a common way to represent missing data
+GAPPED_X = np.array([np.nan, 0, 1, np.nan, 3, 4, np.nan])
+GAPPED_Y = np.array([np.nan, 10, 11, np.nan, 13, 14, np.nan])
+
+
+def test_vertical_dragline_snapto_nan_gaps(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ls = ax.plot(GAPPED_X, GAPPED_Y)[0]
+    ax.set_xlim(-4, 8)  # Leave room to drag beyond the data inside the axes
+    dl = DragLine(ax, position=2, orientation=Orientation.VERTICAL, snap_to=ls)
+
+    drag(ax, (2, 12), (6, 12))
+    assert dl.location == pytest.approx(4)
+
+    drag(ax, (4, 12), (-2, 12))
+    assert dl.location == pytest.approx(0)
+
+
+def test_horizontal_dragline_snapto_nan_gaps(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ls = ax.plot(GAPPED_X, GAPPED_Y)[0]
+    ax.set_ylim(6, 18)  # Leave room to drag beyond the data inside the axes
+    dl = DragLine(ax, position=12, orientation=Orientation.HORIZONTAL, snap_to=ls)
+
+    drag(ax, (2, 12), (2, 16))
+    assert dl.location == pytest.approx(14)
+
+    drag(ax, (2, 14), (2, 8))
+    assert dl.location == pytest.approx(10)
+
+
+def test_dragrect_snapto_nan_gaps(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ls = ax.plot(GAPPED_X, GAPPED_Y)[0]
+    ax.set_xlim(-4, 8)  # Leave room to drag beyond the data inside the axes
+    dr = DragRect(ax, position=1, width=1, snap_to=ls)
+
+    drag(ax, (1.5, 12), (5.5, 12))
+    assert dr.bounds == pytest.approx((3, 4))
+
+    drag(ax, (3.5, 12), (-0.5, 12))
+    assert dr.bounds == pytest.approx((0, 1))
+
+
+def test_dragline_snapto_nan_gaps_out_of_bounds_raises(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ls = ax.plot(GAPPED_X, GAPPED_Y)[0]
+
+    with pytest.raises(ValueError, match="bounds"):
+        _ = DragLine(ax, position=5, snap_to=ls)
+
+
+def test_dragrect_snapto_nan_gaps_out_of_bounds_raises(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    ls = ax.plot(GAPPED_X, GAPPED_Y)[0]
+
+    with pytest.raises(ValueError, match="bounds"):
+        _ = DragRect(ax, position=3, width=2, snap_to=ls)
+
+
 # Make sure x & y data are different so we're not masking issues
 DUMMY_LINE = Line2D(xdata=np.array([0, 1, 2]), ydata=np.array([10, 11, 12]))
 

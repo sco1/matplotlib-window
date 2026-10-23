@@ -172,19 +172,23 @@ class _DraggableObject:
         """
         Validate that the `snap_to` object, if provided, actually contains lineseries xy data.
 
-        If `snap_to` is `None`, or is a plot object that contains xy data, it is returned unchanged.
-        Otherwise an exception is raised.
+        If `snap_to` is `None`, or is a plot object that contains at least one finite xy data point,
+        it is returned unchanged. Otherwise an exception is raised.
         """
         if snap_to is None:
             return None
 
         try:
-            xydata = snap_to.get_xydata()
+            xydata = np.asarray(snap_to.get_xydata())
         except AttributeError as e:
             raise ValueError("Cannot provide an empty lineseries to snapto") from e
 
-        if len(xydata) == 0:  # type: ignore[arg-type]
+        if len(xydata) == 0:
             raise ValueError("Cannot provide an empty lineseries to snapto")
+
+        # NaN gaps are fine, but there needs to be at least one plotted point to snap to
+        if not np.isfinite(xydata).all(axis=1).any():
+            raise ValueError("Cannot provide a lineseries without any finite data to snapto")
 
         return snap_to
 
@@ -222,9 +226,9 @@ def limit_drag(plotted_data: npt.ArrayLike, query: float) -> float:
     NOTE: `plotted_data` is assumed to be numeric & of the same units as `query`; see
     `get_native_data` for converting plotted data to match event coordinates.
     """
-    # Data series may not be sorted, so use min/max
+    # Data series may not be sorted, so use min/max; NaN-aware since plotted data may contain gaps
     data = np.asarray(plotted_data, dtype=float)
-    return float(np.clip(query, data.min(), data.max()))
+    return float(np.clip(query, np.nanmin(data), np.nanmax(data)))
 
 
 class DragLine(_DraggableObject):
@@ -343,7 +347,7 @@ class DragLine(_DraggableObject):
         else:
             plotted_data = get_native_data(snap_to, "x")
 
-        min_val, max_val = plotted_data.min(), plotted_data.max()
+        min_val, max_val = np.nanmin(plotted_data), np.nanmax(plotted_data)
         if not (min_val <= self.location <= max_val):
             raise ValueError("DragLine must be within the bounds of the provided snapto line")
 
@@ -524,7 +528,7 @@ class DragRect(_DraggableObject):
         # Check that the draggable rectangle is within the bounds of the snap_to lineseries
         l_pos, r_pos = self.bounds
         plotted_data = get_native_data(snap_to, "x")
-        min_val, max_val = plotted_data.min(), plotted_data.max()
+        min_val, max_val = np.nanmin(plotted_data), np.nanmax(plotted_data)
         if not (min_val <= l_pos <= max_val) or not (min_val <= r_pos <= max_val):
             raise ValueError("DragRect must be within the bounds of the provided snapto line")
 
