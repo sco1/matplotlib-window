@@ -170,9 +170,9 @@ class _DraggableObject:
 
     def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
         """
-        Validate that the `snap_to` object, if provided, actually contains x data.
+        Validate that the `snap_to` object, if provided, actually contains lineseries xy data.
 
-        If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
+        If `snap_to` is `None`, or is a plot object that contains xy data, it is returned unchanged.
         Otherwise an exception is raised.
         """
         if snap_to is None:
@@ -320,10 +320,10 @@ class DragLine(_DraggableObject):
 
     def validate_snap_to(self, snap_to: Line2D | None) -> Line2D | None:
         """
-        Validate that the `snap_to` object, if provided, actually contains x data.
+        Validate that the `snap_to` object, if provided, bounds the line being created.
 
-        If `snap_to` is `None`, or is a plot object that contains x data, it is returned unchanged.
-        Otherwise an exception is raised.
+        If `snap_to` is `None`, or is a plot object whose data along the line's axis of motion
+        contains the line's location, it is returned unchanged. Otherwise an exception is raised.
 
         NOTE: This should be called after the draggable object is registered so the object is
         instantiated & references are set.
@@ -334,8 +334,13 @@ class DragLine(_DraggableObject):
         # Superclass implementation handles checking that the lineseries contains data
         super().validate_snap_to(snap_to)
 
-        # Check that the draggable line is within the bounds of the snap_to lineseries
-        plotted_data = snap_to.get_xdata()
+        # Check that the draggable line is within the bounds of the snap_to lineseries along its
+        # axis of motion
+        if self.orientation == Orientation.HORIZONTAL:
+            plotted_data = snap_to.get_ydata()
+        else:
+            plotted_data = snap_to.get_xdata()
+
         min_val, max_val = plotted_data.min(), plotted_data.max()  # type: ignore[union-attr]
         if not (min_val <= self.location <= max_val):
             raise ValueError("DragLine must be within the bounds of the provided snapto line")

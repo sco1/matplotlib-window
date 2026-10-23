@@ -24,7 +24,7 @@ def test_limit_drag(query: NUMERIC_T, truth_out: NUMERIC_T) -> None:
     assert limit_drag(plotted_data=PLOTTED_DATA, query=query) == pytest.approx(truth_out)
 
 
-PLOTTED_TIMEDELTA = np.array([np.timedelta64(i) for i in range(1, 6)])
+PLOTTED_TIMEDELTA = np.array([np.timedelta64(i, "D") for i in range(1, 6)])
 NP_TIMEDELTA_LIMIT_DRAG_TEST_CASES = (
     (-1, 1),
     (-1.0, 1),

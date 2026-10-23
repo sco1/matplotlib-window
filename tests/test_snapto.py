@@ -46,7 +46,8 @@ def test_dragrect_snapto_empty_data_raises(plotobj: PLOTOBJ_T) -> None:
         dr.validate_snap_to(EMPTY_LINE)
 
 
-DUMMY_LINE = Line2D(xdata=np.array([0, 1, 2]), ydata=np.array([0, 1, 2]))
+# Make sure x & y data are different so we're not masking issues
+DUMMY_LINE = Line2D(xdata=np.array([0, 1, 2]), ydata=np.array([10, 11, 12]))
 
 
 def test_vertical_dragline_snapto_out_of_bounds_raises(plotobj: PLOTOBJ_T) -> None:
@@ -72,7 +73,23 @@ def test_vertical_dragline_valid_snapto(plotobj: PLOTOBJ_T) -> None:
 
 def test_horizontal_dragline_valid_snapto(plotobj: PLOTOBJ_T) -> None:
     _, ax = plotobj
-    _ = DragLine(ax, position=1, orientation=Orientation.HORIZONTAL, snap_to=DUMMY_LINE)
+    _ = DragLine(ax, position=11, orientation=Orientation.HORIZONTAL, snap_to=DUMMY_LINE)
+
+
+def test_vertical_dragline_snapto_oob_raises(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dl = DragLine(ax, position=101, orientation=Orientation.VERTICAL)
+
+    with pytest.raises(ValueError, match="bounds"):
+        dl.validate_snap_to(DUMMY_LINE)
+
+
+def test_horizontal_dragline_snapto_oob_raises(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dl = DragLine(ax, position=1, orientation=Orientation.HORIZONTAL)
+
+    with pytest.raises(ValueError, match="bounds"):
+        dl.validate_snap_to(DUMMY_LINE)
 
 
 RECT_BOUNDS_TEST_CASES = (
