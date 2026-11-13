@@ -15,6 +15,7 @@ from tests.helpers import (
     GAPPED_Y,
     SNAP_TO_DATA_PARAMS,
     drag,
+    fire_event,
     native_extents,
 )
 
@@ -230,3 +231,63 @@ def test_horizontal_dragline_data_type_position(data: t.Any, plotobj: PLOTOBJ_T)
     dl = DragLine(ax, position=data[1], orientation=Orientation.HORIZONTAL, snap_to=ls)
     assert isinstance(dl.location, float)
     assert dl.location == pytest.approx(native[1])
+
+
+def test_vertical_dragline_limit_change_respans(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dl = DragLine(ax=ax, position=0.5, orientation=Orientation.VERTICAL)
+
+    ax.set_ylim(-5, 5)
+    assert get_native_data(dl.myobj, "y") == pytest.approx([-5, 5])
+    assert dl.location == pytest.approx(0.5)
+
+
+def test_horizontal_dragline_limit_change_respans(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dl = DragLine(ax=ax, position=0.5, orientation=Orientation.HORIZONTAL)
+
+    ax.set_xlim(-5, 5)
+    assert get_native_data(dl.myobj, "x") == pytest.approx([-5, 5])
+    assert dl.location == pytest.approx(0.5)
+
+
+def test_dragline_click_in_other_axes_ignored(plotobj: PLOTOBJ_T) -> None:
+    fig, ax = plotobj
+
+    # Axes in the same figure share a canvas, so clicks in other axes are dispatched to all of them
+    ax.set_position((0.05, 0.1, 0.4, 0.8))
+    other_ax = fig.add_axes((0.55, 0.1, 0.4, 0.8))
+    dl = DragLine(ax=ax, position=0.5)
+
+    fire_event(other_ax, "button_press_event", 0.5, 0.5)
+    assert not dl.clicked
+    assert not dl.parent_canvas.widgetlock.locked()
+
+
+def test_dragline_drag_outside_axes_ignored(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dl = DragLine(ax=ax, position=0.5)
+
+    # Motion outside of the axes during a drag should leave the line at its last position
+    fire_event(ax, "button_press_event", 0.5, 0.5)
+    fire_event(ax, "motion_notify_event", 0.7, 0.5)
+    fire_event(ax, "motion_notify_event", 1.5, 0.5)  # Beyond the right edge of the axes
+    fire_event(ax, "button_release_event", 1.5, 0.5)
+
+    assert dl.location == pytest.approx(0.7)
+
+
+def test_vertical_dragline_drag(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dl = DragLine(ax=ax, position=0.5, orientation=Orientation.VERTICAL)
+
+    drag(ax, (0.5, 0.5), (0.7, 0.2))
+    assert dl.location == pytest.approx(0.7)
+
+
+def test_horizontal_dragline_drag(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dl = DragLine(ax=ax, position=0.5, orientation=Orientation.HORIZONTAL)
+
+    drag(ax, (0.5, 0.5), (0.2, 0.7))
+    assert dl.location == pytest.approx(0.7)

@@ -14,6 +14,7 @@ from tests.helpers import (
     GAPPED_Y,
     SNAP_TO_DATA_PARAMS,
     drag,
+    fire_event,
     has_callback_to,
     native_extents,
 )
@@ -188,3 +189,29 @@ def test_dragrect_data_type_negative_width_raises(data: t.Any, plotobj: PLOTOBJ_
 
     with pytest.raises(ValueError, match="greater than"):
         _ = DragRect(ax, position=data[2], width=(data[1] - data[2]))
+
+
+def test_dragrect_click_in_other_axes_ignored(plotobj: PLOTOBJ_T) -> None:
+    fig, ax = plotobj
+
+    # Axes in the same figure share a canvas, so clicks in other axes are dispatched to all of them
+    ax.set_position((0.05, 0.1, 0.4, 0.8))
+    other_ax = fig.add_axes((0.55, 0.1, 0.4, 0.8))
+    dr = DragRect(ax=ax, position=0.2, width=0.3)
+
+    fire_event(other_ax, "button_press_event", 0.35, 0.5)
+    assert not dr.clicked
+    assert not dr.parent_canvas.widgetlock.locked()
+
+
+def test_dragrect_drag_outside_axes_ignored(plotobj: PLOTOBJ_T) -> None:
+    _, ax = plotobj
+    dr = DragRect(ax=ax, position=0.2, width=0.3)
+
+    # Motion outside of the axes during a drag should leave the rectangle at its last position
+    fire_event(ax, "button_press_event", 0.35, 0.5)
+    fire_event(ax, "motion_notify_event", 0.45, 0.5)
+    fire_event(ax, "motion_notify_event", 1.5, 0.5)  # Beyond the right edge of the axes
+    fire_event(ax, "button_release_event", 1.5, 0.5)
+
+    assert dr.bounds == pytest.approx((0.3, 0.6))
