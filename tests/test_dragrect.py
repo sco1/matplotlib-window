@@ -3,7 +3,8 @@ import typing as t
 import pytest
 from pytest_mock import MockerFixture
 
-from matplotlib_window.base import DragRect, get_native_data
+from matplotlib_window.coordinates import get_native_data
+from matplotlib_window.dragrect import DragRect
 from tests.conftest import PLOTOBJ_T
 from tests.helpers import (
     ALL_NAN_LINE,

@@ -3,7 +3,9 @@ import typing as t
 import pytest
 from pytest_mock import MockerFixture
 
-from matplotlib_window.base import DragLine, Orientation, get_native_data
+from matplotlib_window.coordinates import get_native_data
+from matplotlib_window.draggable import Orientation
+from matplotlib_window.dragline import DragLine
 from tests.conftest import PLOTOBJ_T
 from tests.helpers import (
     ALL_NAN_LINE,
@@ -25,7 +27,7 @@ def test_dragline_invalid_orientation_raises(plotobj: PLOTOBJ_T) -> None:
 
 DRAGLINE_LOCATION_TEST_CASES = (
     (Orientation.VERTICAL, 1),
-    (Orientation.VERTICAL, 1),
+    (Orientation.HORIZONTAL, 1),
 )
 
 

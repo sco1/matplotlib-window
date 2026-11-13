@@ -2,8 +2,7 @@ import matplotlib.dates as mdates
 import numpy as np
 import pytest
 
-from matplotlib_window.base import (
-    NUMERIC_T,
+from matplotlib_window.coordinates import (
     RectParams,
     get_native_data,
     limit_drag,
@@ -11,6 +10,7 @@ from matplotlib_window.base import (
     to_native_span,
     transform_rect_params,
 )
+from matplotlib_window.draggable import NUMERIC_T
 from tests.conftest import PLOTOBJ_T
 
 PLOTTED_DATA = np.array([1, 2, 3, 4, 5])

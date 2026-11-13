@@ -5,7 +5,8 @@ import pytest
 from matplotlib.lines import Line2D
 from pytest_mock import MockerFixture
 
-from matplotlib_window.base import FlexibleRect, get_native_data
+from matplotlib_window.coordinates import get_native_data
+from matplotlib_window.flexrect import FlexibleRect
 from tests.conftest import PLOTOBJ_T
 from tests.helpers import SNAP_TO_DATA_PARAMS, drag, has_callback_to
 

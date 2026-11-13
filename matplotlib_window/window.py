@@ -3,7 +3,9 @@ from collections import abc
 
 import matplotlib.pyplot as plt
 
-from matplotlib_window.base import DragRect, FlexibleRect, NUMERIC_T, UNIT_T
+from matplotlib_window.draggable import NUMERIC_T, UNIT_T
+from matplotlib_window.dragrect import DragRect
+from matplotlib_window.flexrect import FlexibleRect
 
 DEFAULT_AXES_KWARGS: dict[str, t.Any] = {
     "title": "Close window to return selected window bounds",

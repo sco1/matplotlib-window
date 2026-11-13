@@ -7,7 +7,7 @@ from matplotlib.axes import Axes
 from matplotlib.backend_bases import FigureCanvasBase, MouseButton, MouseEvent
 from matplotlib.lines import Line2D
 
-from matplotlib_window.base import get_native_data
+from matplotlib_window.coordinates import get_native_data
 
 
 def has_callback_to(

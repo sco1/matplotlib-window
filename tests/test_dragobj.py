@@ -1,6 +1,6 @@
 import pytest
 
-from matplotlib_window.base import _DraggableObject
+from matplotlib_window.draggable import _DraggableObject
 from tests.helpers import ALL_NAN_LINE, EMPTY_LINE
 
 
